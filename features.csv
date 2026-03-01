@@ -1,4 +1,3 @@
-0
 mileage_km
 engine_hours
 vehicle_age_years
@@ -11,7 +10,6 @@ fuel_efficiency_kmpl
 days_since_last_service
 mileage_per_year
 engine_hours_per_km
-fault_density
 thermal_stress
 load_efficiency
 vehicle_type_Sedan
