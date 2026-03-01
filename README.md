@@ -1,68 +1,180 @@
-# Vehicle Maintenance Prediction & Agentic Fleet Management
-### Transitioning from Predictive Analytics to Autonomous Fleet Operations
+🚗 Vehicle Maintenance Prediction
+& Agentic Fleet Management System
+An end-to-end predictive maintenance system that proactively detects vehicles requiring servicing using structured telemetry data.
 
-## Project Vision
-This system represents an end-to-end evolution of fleet management. Starting with **Milestone 1**, we establish a high-precision predictive engine using classical Machine Learning. This engine serves as the analytical foundation for **Milestone 2**, where the system will be transformed into an **Agentic AI Assistant** capable of autonomous reasoning, service scheduling, and strategic fleet optimization.
+Built with progressive model comparison, hyperparameter tuning, and deployed using Streamlit for real-time inference.
 
----
+🌐 Live System
 
-## Milestone 1: Predictive Analytics Engine
-The objective of this milestone is to move fleet operations from **Reactive Maintenance** (fixing after failure) to **Proactive Maintenance** (predicting failure before it occurs).
+🔗 Streamlit App: [Add your deployed link]
+🎥 Project Demo Video: [Add your video link]
 
-### 1. Data Architecture & Signals
-The model processes high-frequency telemetry data to extract signals of mechanical degradation.
+🎯 Problem Statement
 
+Fleet management systems traditionally rely on:
 
+Fixed servicing schedules
 
-#### Feature Engineering (The "Stress" Metrics)
-Beyond raw data, we engineered specific domain-relevant features to capture the "Health Index" of each vehicle:
-* **Thermal Stress Index:** $oil\_temp \times engine\_load$. Captures the combined impact of high temperature and high demand.
-* **Fault Density:** $fault\_codes / engine\_hours$. Normalizes errors against usage time to identify chronically failing units.
-* **Operational Intensity:** `mileage_per_year` and `engine_hours_per_km` to identify vehicles in extreme duty cycles.
-* **Efficiency Decay:** `load_efficiency` ($load / fuel\_efficiency$) to detect abnormal fuel consumption.
+Reactive maintenance
 
-### 2. Robust Preprocessing Pipeline
-To ensure model reliability, a rigorous data sanitization pipeline was implemented:
-* **Temporal Logic:** Converted service dates into a continuous `days_since_last_service` variable.
-* **Outlier Mitigation:** Utilized **IQR Capping** for `mileage_km` and `engine_hours`.
-* **Statistical Imputation:** Numerical nulls handled via **Median Imputation**; categorical nulls via **Mode Imputation**.
-* **Multicollinearity Management:** Applied One-Hot Encoding with `drop_first=True`.
+Manual inspection
 
----
+These approaches ignore real operational stress.
 
-## 3. Machine Learning Strategy
-### Algorithm Selection: Random Forest
-While the project scope allows for Logistic Regression or Decision Trees, we implemented a **Random Forest Classifier ($n=400$)** to leverage ensemble learning.
+This project answers:
 
+Can we use telemetry data to predict maintenance requirements before failure occurs?
 
+This is not just classification — it is risk detection.
 
-**Why Random Forest?**
-* **Non-Linear Interactions:** Mechanical failure is rarely linear; it is often the interaction of multiple stressors.
-* **Feature Importance:** Allows ranking of telemetry signals (e.g., fault codes vs. oil temp) as risk predictors.
-* **Class Imbalance:** Optimized using `class_weight="balanced"` to ensure critical "Maintenance Required" events are captured.
+False negatives may lead to:
 
-### 4. Evaluation Framework
-The model is evaluated on its ability to minimize **False Negatives** (missed failures).
-* **Metrics:** Accuracy, Precision, Recall, and F1-Score.
-* **Splitting:** 80/20 Stratified Split to maintain class proportions.
-* **Persistence:** Model and feature metadata are serialized via `joblib`.
+Breakdown
 
----
+Downtime
 
-## 5. Future Roadmap: Agentic Evolution (Milestone 2)
-The predictive output of this model will serve as "sensory input" for an AI Agent built on **LangGraph**.
+Financial loss
 
-| Component | Function |
-| :--- | :--- |
-| **Reasoning Engine** | Open-source LLM (via Free-tier APIs) |
-| **Agent Framework** | LangGraph for autonomous workflow state management |
-| **Knowledge Base** | RAG (Chroma/FAISS) containing vehicle manuals and logs |
-| **Output** | Autonomous service scheduling and risk explanations |
+Safety hazards
 
----
+Therefore, model selection prioritizes Recall and F1-score, not accuracy alone.
 
-## Technical Stack
-* **Core:** Python, Pandas, NumPy, Scikit-Learn
-* **Environment:** Google Colab / GitHub
-* **Deployment Target:** Streamlit / Hugging Face Spaces (Mandatory)
-* **Serialization:** Joblib
+📊 Dataset Overview
+Metric	Value
+Samples	~15,000 vehicles
+Target	maintenance_required
+Imbalance	75% : 25%
+Final Features	28
+Feature Types	Numerical + One-Hot Encoded
+🧠 Feature Engineering Strategy
+
+Raw telemetry cannot fully capture mechanical stress.
+
+Engineered features include:
+
+Feature	Captures
+mileage_per_year	Operational intensity
+thermal_stress	Load × Temperature strain
+engine_hours_per_km	Efficiency workload
+fault_density	Fault recurrence
+load_efficiency	Stress relative to output
+
+Feature importance confirmed these transformations.
+
+🤖 Model Development Pipeline
+
+Progressive modelling approach:
+
+Logistic Regression (baseline linear)
+
+Decision Tree (non-linear splits)
+
+Random Forest (variance reduction)
+
+XGBoost (final tuned model)
+
+📈 Model Performance (Test Set)
+Model	Accuracy	Precision	Recall	F1	ROC-AUC
+Logistic Regression	0.84	0.76	0.60	0.68	0.92
+Decision Tree	0.83	0.73	0.60	0.66	0.85
+Random Forest	0.85	0.78	0.58	0.70	0.91
+XGBoost (Tuned)	0.85	0.80	0.76	0.78	0.92
+Why XGBoost?
+
+Highest recall (critical for maintenance detection)
+
+Balanced precision-recall
+
+Strong ROC-AUC
+
+Better minority class detection
+
+Selected based on operational risk considerations.
+
+⚙️ Hyperparameter Optimization
+
+RandomizedSearchCV tuned:
+
+max_depth
+
+n_estimators
+
+learning_rate
+
+subsample
+
+scale_pos_weight
+
+scale_pos_weight handled class imbalance.
+
+🏗 System Architecture
+Raw Data
+   ↓
+EDA & Cleaning
+   ↓
+Feature Engineering
+   ↓
+Encoding
+   ↓
+Train-Test Split
+   ↓
+Model Training (4 Models)
+   ↓
+Hyperparameter Tuning
+   ↓
+Evaluation
+   ↓
+Model Serialization
+   ↓
+Streamlit Deployment
+🚀 Deployment Architecture
+🔐 Model Serialization
+
+Saved using joblib
+
+Ensures reproducibility
+
+📦 Feature Order Preservation
+
+features.csv exported
+
+Prevents inference misalignment
+
+🖥 Streamlit UI
+
+Numeric telemetry inputs
+
+Dropdown categorical selection
+
+Real-time risk prediction
+
+Probability output
+
+📊 Probability-Based Decision
+
+Instead of returning 0/1 only:
+
+P(Maintenance Required)
+
+Allows dynamic threshold tuning.
+
+📂 Repository Structure
+Vehicle-Maintenance-Prediction/
+│
+├── notebooks/          # Colab experimentation & EDA
+├── models/             # Trained model files (.joblib)
+├── data/               # Processed dataset
+├── app.py              # Streamlit deployment
+├── features.csv        # Feature order reference
+├── requirements.txt    # Dependencies
+├── report/             # LaTeX + PDF report
+└── README.md
+🧰 Technology Stack
+Layer	Tools
+Data Processing	pandas, NumPy
+Visualization	matplotlib, seaborn
+Machine Learning	scikit-learn, XGBoost
+Tuning	RandomizedSearchCV
+Deployment	Streamlit
+Hosting	Streamlit Cloud
+Version Control	Git, GitHub
