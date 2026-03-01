@@ -1,180 +1,133 @@
-🚗 Vehicle Maintenance Prediction
-& Agentic Fleet Management System
-An end-to-end predictive maintenance system that proactively detects vehicles requiring servicing using structured telemetry data.
+# 🚗 Vehicle Maintenance Prediction & Agentic Fleet Management
 
-Built with progressive model comparison, hyperparameter tuning, and deployed using Streamlit for real-time inference.
+An end-to-end machine learning system that predicts whether a vehicle requires maintenance using structured operational telemetry data.  
+The pipeline performs exploratory data analysis, feature engineering, multi-model comparison, hyperparameter tuning, and deploys a tuned XGBoost classifier through an interactive Streamlit application.
 
-🌐 Live System
+> **Live Demo:** [Add your Streamlit link here]  
+> **Project Video:** [Add your demo video link here]
 
-🔗 Streamlit App: [Add your deployed link]
-🎥 Project Demo Video: [Add your video link]
+---
 
-🎯 Problem Statement
+## Highlights
 
-Fleet management systems traditionally rely on:
+| | |
+|---|---|
+| **Problem Type** | Predictive Maintenance (Binary Classification) |
+| **Dataset Size** | ~15,000 records, 28 engineered features |
+| **Class Distribution** | ~75% No Maintenance / ~25% Maintenance |
+| **Models Compared** | Logistic Regression, Decision Tree, Random Forest, XGBoost |
+| **Final Model** | Tuned XGBoost (ROC-AUC = 0.92) |
+| **Stack** | Python, pandas, scikit-learn, XGBoost, Streamlit |
+| **Deployment** | Streamlit Cloud |
 
-Fixed servicing schedules
+---
 
-Reactive maintenance
+## Problem Statement
 
-Manual inspection
+Fleet management systems traditionally rely on fixed schedules and reactive servicing.  
+These approaches fail to consider real operational stress and vehicle-specific usage patterns.
 
-These approaches ignore real operational stress.
+This project addresses the following core question:
 
-This project answers:
+> Can telemetry data be used to proactively detect vehicles requiring maintenance before breakdown occurs?
 
-Can we use telemetry data to predict maintenance requirements before failure occurs?
+This is not simply a classification task — it is a **risk detection problem**, where false negatives may lead to:
 
-This is not just classification — it is risk detection.
+- Breakdown  
+- Operational downtime  
+- Financial loss  
+- Safety hazards  
 
-False negatives may lead to:
+Therefore, model evaluation prioritizes **Recall and F1-score**, not accuracy alone.
 
-Breakdown
+---
 
-Downtime
+## Dataset Overview
 
-Financial loss
+The dataset consists of structured fleet telemetry features including:
 
-Safety hazards
+- mileage_km  
+- engine_hours  
+- vehicle_age_years  
+- fault_code_count  
+- oil_temp_avg_celsius  
+- vibration_level  
+- battery_voltage  
+- engine_load_percent  
+- fuel_efficiency_kmpl  
+- days_since_last_service  
 
-Therefore, model selection prioritizes Recall and F1-score, not accuracy alone.
+Additional domain-driven engineered features were created to capture operational intensity and mechanical stress interactions.
 
-📊 Dataset Overview
-Metric	Value
-Samples	~15,000 vehicles
-Target	maintenance_required
-Imbalance	75% : 25%
-Final Features	28
-Feature Types	Numerical + One-Hot Encoded
-🧠 Feature Engineering Strategy
+---
 
-Raw telemetry cannot fully capture mechanical stress.
+## Feature Engineering
 
-Engineered features include:
+Raw telemetry alone does not capture compounded stress effects.  
+The following engineered features were introduced:
 
-Feature	Captures
-mileage_per_year	Operational intensity
-thermal_stress	Load × Temperature strain
-engine_hours_per_km	Efficiency workload
-fault_density	Fault recurrence
-load_efficiency	Stress relative to output
+| Engineered Feature | Purpose |
+|-------------------|---------|
+| mileage_per_year | Captures usage intensity |
+| thermal_stress | Engine load × oil temperature |
+| engine_hours_per_km | Efficiency indicator |
+| fault_density | Normalized fault frequency |
+| load_efficiency | Stress relative to performance |
 
-Feature importance confirmed these transformations.
+Feature importance analysis confirmed the predictive value of these transformations.
 
-🤖 Model Development Pipeline
+---
 
-Progressive modelling approach:
+## Model Development Strategy
 
-Logistic Regression (baseline linear)
+A progressive modelling approach was followed:
 
-Decision Tree (non-linear splits)
+1. Logistic Regression — linear baseline  
+2. Decision Tree — non-linear baseline  
+3. Random Forest — ensemble variance reduction  
+4. **XGBoost — tuned final model**
 
-Random Forest (variance reduction)
+---
 
-XGBoost (final tuned model)
+## Model Performance (Test Set)
 
-📈 Model Performance (Test Set)
-Model	Accuracy	Precision	Recall	F1	ROC-AUC
-Logistic Regression	0.84	0.76	0.60	0.68	0.92
-Decision Tree	0.83	0.73	0.60	0.66	0.85
-Random Forest	0.85	0.78	0.58	0.70	0.91
-XGBoost (Tuned)	0.85	0.80	0.76	0.78	0.92
-Why XGBoost?
+| Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|--------|----------|------------|--------|------|---------|
+| Logistic Regression | 0.84 | 0.76 | 0.60 | 0.68 | 0.92 |
+| Decision Tree | 0.83 | 0.73 | 0.60 | 0.66 | 0.85 |
+| Random Forest | 0.85 | 0.78 | 0.58 | 0.70 | 0.91 |
+| **XGBoost (Tuned)** | **0.85** | **0.80** | **0.76** | **0.78** | **0.92** |
 
-Highest recall (critical for maintenance detection)
+XGBoost was selected due to its superior recall and balanced performance across evaluation metrics.
 
-Balanced precision-recall
+---
 
-Strong ROC-AUC
+## Hyperparameter Optimization
 
-Better minority class detection
+RandomizedSearchCV was used to tune:
 
-Selected based on operational risk considerations.
+- max_depth  
+- n_estimators  
+- learning_rate  
+- subsample  
+- scale_pos_weight  
 
-⚙️ Hyperparameter Optimization
+Class imbalance was handled through optimized `scale_pos_weight`.
 
-RandomizedSearchCV tuned:
+---
 
-max_depth
+## Deployment
 
-n_estimators
+The final tuned XGBoost model was serialized using `joblib` and deployed via Streamlit.
 
-learning_rate
+Deployment ensures:
 
-subsample
+- Feature order preservation  
+- Probability-based risk scoring  
+- Real-time inference  
 
-scale_pos_weight
+The deployed application allows fleet operators to input telemetry data and receive maintenance risk predictions instantly.
 
-scale_pos_weight handled class imbalance.
+---
 
-🏗 System Architecture
-Raw Data
-   ↓
-EDA & Cleaning
-   ↓
-Feature Engineering
-   ↓
-Encoding
-   ↓
-Train-Test Split
-   ↓
-Model Training (4 Models)
-   ↓
-Hyperparameter Tuning
-   ↓
-Evaluation
-   ↓
-Model Serialization
-   ↓
-Streamlit Deployment
-🚀 Deployment Architecture
-🔐 Model Serialization
-
-Saved using joblib
-
-Ensures reproducibility
-
-📦 Feature Order Preservation
-
-features.csv exported
-
-Prevents inference misalignment
-
-🖥 Streamlit UI
-
-Numeric telemetry inputs
-
-Dropdown categorical selection
-
-Real-time risk prediction
-
-Probability output
-
-📊 Probability-Based Decision
-
-Instead of returning 0/1 only:
-
-P(Maintenance Required)
-
-Allows dynamic threshold tuning.
-
-📂 Repository Structure
-Vehicle-Maintenance-Prediction/
-│
-├── notebooks/          # Colab experimentation & EDA
-├── models/             # Trained model files (.joblib)
-├── data/               # Processed dataset
-├── app.py              # Streamlit deployment
-├── features.csv        # Feature order reference
-├── requirements.txt    # Dependencies
-├── report/             # LaTeX + PDF report
-└── README.md
-🧰 Technology Stack
-Layer	Tools
-Data Processing	pandas, NumPy
-Visualization	matplotlib, seaborn
-Machine Learning	scikit-learn, XGBoost
-Tuning	RandomizedSearchCV
-Deployment	Streamlit
-Hosting	Streamlit Cloud
-Version Control	Git, GitHub
+## Repository Structure
