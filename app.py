@@ -9,21 +9,11 @@ st.markdown("Production-ready vehicle maintenance prediction dashboard.")
 
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load('vehicle_model.joblib')
-    try:
-        scaler = joblib.load('vehicle_scaler.joblib')
-        has_scaler = True
-    except:
-        scaler = None
-        has_scaler = False
-    
-    # FIX: Skip header row '0', get EXACT 28 features
-    features_df = pd.read_csv('features.csv', header=None)
-    features = features_df[0].iloc[1:].tolist()  # Skip index 0, get 28 features
-    
-    return model, scaler, features, has_scaler
+    model = joblib.load("vehicle_model.joblib")
+    features = pd.read_csv("features.csv", header=None)[0].tolist()
+    return model, features
 
-model, scaler, features, has_scaler = load_artifacts()
+model, features = load_artifacts()
 
 st.success(f"✅ Loaded **{len(features)} features** - Model ready!")
 
