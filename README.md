@@ -3,8 +3,9 @@
 An end-to-end machine learning system that predicts whether a vehicle requires maintenance using structured operational telemetry data.  
 The pipeline performs exploratory data analysis, feature engineering, multi-model comparison, hyperparameter tuning, and deploys a tuned XGBoost classifier through an interactive Streamlit application.
 
-> **Live Demo:** [Add your Streamlit link here]  
+> **Live Demo:** [[Deployed Web App]](https://vehicle-maintenance-dashboard.streamlit.app/)  
 > **Project Video:** [Add your demo video link here]
+> **Colab Notebook Link:** [[Google Colab Notebook]](https://colab.research.google.com/drive/1GCYD7v7glAUhZDgZqOBbnpfGuIdSKBGr?usp=sharing)
 
 ---
 
