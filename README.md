@@ -193,7 +193,9 @@ streamlit run Home.py
 ├── data/                 # Raw/Sample datasets
 ├── models/               # Serialized XGBoost model artifacts
 ├── pages/                # Streamlit sub-pages (EDA, Prediction, Insights)
-└── utils/                # Shared logic (preprocessor, model loader, ui)
+└── utils/                # Shared logic (preprocessor, model loader, ui styling)
+└── .streamlit/
+    └── config.toml/      # Configuration of global colors and font      
 ```
 
 ---
