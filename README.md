@@ -220,22 +220,24 @@ streamlit run Home.py
 
 ## 📂 Repository Structure
 
+```text
 vehicle_maintenance_dashboard/
 │
-├── assets/            # Static files (CSS, images)
-├── data/              # Datasets used for training and inference
-├── models/            # Serialized trained model artifacts
-├── pages/             # Streamlit multi-page application modules
-├── utils/             # Shared preprocessing and model utilities
-├── report/            # Final project report (LaTeX + PDF)
-├── walkthrough/       # Complete ML development notebook
-├── .streamlit/        # Streamlit configuration
-├── .devcontainer/     # Development container setup
+├── assets/            -> Static files (CSS, images)
+├── data/              -> Datasets used for training and inference
+├── models/            -> Serialized trained model artifacts
+├── pages/             -> Streamlit multi-page application modules
+├── utils/             -> Shared preprocessing and model utilities
+├── report/            -> Final project report (LaTeX + PDF)
+├── walkthrough/       -> Complete ML development notebook
+├── .streamlit/        -> Streamlit configuration
+├── .devcontainer/     -> Development container setup
 │
-├── Home.py            # Main Streamlit entry point
-├── app.py             # Alternative / fallback app interface
-├── requirements.txt   # Project dependencies
-└── README.md          # Project documentation
+├── Home.py            -> Main Streamlit entry point
+├── app.py             -> Alternative / fallback app interface
+├── requirements.txt   -> Project dependencies
+└── README.md          -> Project documentation
+```
 ---
 
 ## 🛠️ Usage
