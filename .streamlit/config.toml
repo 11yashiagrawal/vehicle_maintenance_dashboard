@@ -1,0 +1,10 @@
+[theme]
+primaryColor = "#cyan"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#000000"
+textColor = "cyan"
+font = "roboto"
+
+[server]
+maxUploadSize = 200
+enableCORS = false

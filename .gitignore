@@ -1,0 +1,29 @@
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+*.log
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+
+# Environments
+venv/
+.venv/
+env/
+.env/
+
+# Streamlit
+.streamlit/logs/
+
+# Cursor / local tooling
+.cursor/
+
+# Model artifacts generated later (optional)
+*.pkl
