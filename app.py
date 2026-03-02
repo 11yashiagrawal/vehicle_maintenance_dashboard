@@ -1,3 +1,5 @@
+# Fallback Prediction Portal
+# This monolithic file provides an emergency backup UI if the main multi-page dashboard fails.
 import streamlit as st
 import joblib
 import pandas as pd

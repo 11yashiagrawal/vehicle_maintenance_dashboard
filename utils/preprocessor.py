@@ -25,6 +25,7 @@ def _default_step(feature_name: str) -> float:
     return 0.1
 
 def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: bool = False) -> Dict[str, Any]:
+    """Generates a responsive grid of inputs, replacing days_since_last_service with a Date Picker."""
    
     input_data: Dict[str, Any] = {}
     ui = st.sidebar if use_sidebar else st
@@ -37,15 +38,18 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     cols = ui.columns(num_cols)
 
     for idx, feature in enumerate(features):
+        # We skip calculated features and one-hot columns in the numeric grid
         if feature in encoded_cols or feature in CALCULATED_FEATURES:
             
+            # Special case: The UI uses a Date Picker to capture the last service event
             if feature == "days_since_last_service":
                 col = cols[idx % num_cols]
                 with col:
                     input_data["last_service_date"] = st.date_input(
                         "Last Service Date",
                         value=date.today(),
-                        help="The date of the most recent maintenance service."
+                        max_value=date.today(),
+                        help="The date of the most recent maintenance service. Future dates are invalid."
                     )
             continue
             
@@ -55,6 +59,8 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
             input_data[feature] = col.number_input(
                 _get_feature_label(feature),
                 value=float(_default_value(feature)),
+                min_value=float(meta.get("min_value", 0.0)),
+                max_value=float(meta.get("max_value", 1000000.0)),
                 step=float(_default_step(feature)),
             )
             ui.caption(meta.get("range_hint", "Enter a realistic value."))
@@ -109,7 +115,7 @@ def calculate_internal_features(input_data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 def build_feature_vector(features: List[str], input_data: Dict[str, Any]) -> np.ndarray:
-   
+    """Transforms raw UI inputs into a model-ready 1x28 feature vector."""
     full_data = calculate_internal_features(input_data)
     
     X = np.zeros((1, len(features)), dtype=float)
@@ -117,10 +123,12 @@ def build_feature_vector(features: List[str], input_data: Dict[str, Any]) -> np.
 
     encoded_cols = set(CAT_ENCODINGS.keys())
     
+    # Fill numeric/calculated features
     for feature in features:
         if feature not in encoded_cols:
             X[0, feature_to_idx[feature]] = float(full_data.get(feature, 0.0))
 
+    # Fill one-hot encoded columns based on categorical selectbox choices
     for encoded_col, (cat_feature, category_value) in CAT_ENCODINGS.items():
         if encoded_col in feature_to_idx:
             selected_value = full_data.get(cat_feature)

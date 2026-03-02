@@ -10,15 +10,15 @@ The pipeline performs exploratory data analysis, feature engineering, multi-mode
 
 ## Highlights
 
-| | |
-|---|---|
-| **Problem Type** | Predictive Maintenance (Binary Classification) |
-| **Dataset Size** | ~15,000 records, 28 engineered features |
-| **Class Distribution** | ~75% No Maintenance / ~25% Maintenance |
-| **Models Compared** | Logistic Regression, Decision Tree, Random Forest, XGBoost |
-| **Final Model** | Tuned XGBoost (ROC-AUC = 0.92) |
-| **Stack** | Python, pandas, scikit-learn, XGBoost, Streamlit |
-| **Deployment** | Streamlit Cloud |
+|                        |                                                            |
+| ---------------------- | ---------------------------------------------------------- |
+| **Problem Type**       | Predictive Maintenance (Binary Classification)             |
+| **Dataset Size**       | ~15,000 records, 28 engineered features                    |
+| **Class Distribution** | ~75% No Maintenance / ~25% Maintenance                     |
+| **Models Compared**    | Logistic Regression, Decision Tree, Random Forest, XGBoost |
+| **Final Model**        | Tuned XGBoost (ROC-AUC = 0.92)                             |
+| **Stack**              | Python, pandas, scikit-learn, XGBoost, Streamlit           |
+| **Deployment**         | Streamlit Cloud                                            |
 
 ---
 
@@ -33,10 +33,10 @@ This project addresses the following core question:
 
 This is not simply a classification task — it is a **risk detection problem**, where false negatives may lead to:
 
-- Breakdown  
-- Operational downtime  
-- Financial loss  
-- Safety hazards  
+- Breakdown
+- Operational downtime
+- Financial loss
+- Safety hazards
 
 Therefore, model evaluation prioritizes **Recall and F1-score**, not accuracy alone.
 
@@ -46,16 +46,16 @@ Therefore, model evaluation prioritizes **Recall and F1-score**, not accuracy al
 
 The dataset consists of structured fleet telemetry features including:
 
-- mileage_km  
-- engine_hours  
-- vehicle_age_years  
-- fault_code_count  
-- oil_temp_avg_celsius  
-- vibration_level  
-- battery_voltage  
-- engine_load_percent  
-- fuel_efficiency_kmpl  
-- days_since_last_service  
+- mileage_km
+- engine_hours
+- vehicle_age_years
+- fault_code_count
+- oil_temp_avg_celsius
+- vibration_level
+- battery_voltage
+- engine_load_percent
+- fuel_efficiency_kmpl
+- days_since_last_service
 
 Additional domain-driven engineered features were created to capture operational intensity and mechanical stress interactions.
 
@@ -66,13 +66,14 @@ Additional domain-driven engineered features were created to capture operational
 Raw telemetry alone does not capture compounded stress effects.  
 The following engineered features were introduced:
 
-| Engineered Feature | Purpose |
-|-------------------|---------|
-| mileage_per_year | Captures usage intensity |
-| thermal_stress | Engine load × oil temperature |
-| engine_hours_per_km | Efficiency indicator |
-| fault_density | Normalized fault frequency |
-| load_efficiency | Stress relative to performance |
+| Engineered Feature        | Purpose                        |
+| ------------------------- | ------------------------------ |
+| mileage_per_year          | Captures usage intensity       |
+| thermal_stress            | Engine load × oil temperature  |
+| engine_hours_per_km       | Efficiency indicator           |
+| fault_density             | Normalized fault frequency     |
+| load_efficiency           | Stress relative to performance |
+| days_since_last_service   | Time since last service        |
 
 Feature importance analysis confirmed the predictive value of these transformations.
 
@@ -82,21 +83,21 @@ Feature importance analysis confirmed the predictive value of these transformati
 
 A progressive modelling approach was followed:
 
-1. Logistic Regression — linear baseline  
-2. Decision Tree — non-linear baseline  
-3. Random Forest — ensemble variance reduction  
+1. Logistic Regression — linear baseline
+2. Decision Tree — non-linear baseline
+3. Random Forest — ensemble variance reduction
 4. **XGBoost — tuned final model**
 
 ---
 
 ## Model Performance (Test Set)
 
-| Model | Accuracy | Precision | Recall | F1 | ROC-AUC |
-|--------|----------|------------|--------|------|---------|
-| Logistic Regression | 0.84 | 0.76 | 0.60 | 0.68 | 0.92 |
-| Decision Tree | 0.83 | 0.73 | 0.60 | 0.66 | 0.85 |
-| Random Forest | 0.85 | 0.78 | 0.58 | 0.70 | 0.91 |
-| **XGBoost (Tuned)** | **0.85** | **0.80** | **0.76** | **0.78** | **0.92** |
+| Model               | Accuracy | Precision | Recall   | F1       | ROC-AUC  |
+| ------------------- | -------- | --------- | -------- | -------- | -------- |
+| Logistic Regression | 0.84     | 0.76      | 0.60     | 0.68     | 0.92     |
+| Decision Tree       | 0.83     | 0.73      | 0.60     | 0.66     | 0.85     |
+| Random Forest       | 0.85     | 0.78      | 0.58     | 0.70     | 0.91     |
+| **XGBoost (Tuned)** | **0.85** | **0.80**  | **0.76** | **0.78** | **0.92** |
 
 XGBoost was selected due to its superior recall and balanced performance across evaluation metrics.
 
@@ -106,11 +107,11 @@ XGBoost was selected due to its superior recall and balanced performance across 
 
 RandomizedSearchCV was used to tune:
 
-- max_depth  
-- n_estimators  
-- learning_rate  
-- subsample  
-- scale_pos_weight  
+- max_depth
+- n_estimators
+- learning_rate
+- subsample
+- scale_pos_weight
 
 Class imbalance was handled through optimized `scale_pos_weight`.
 
@@ -122,12 +123,84 @@ The final tuned XGBoost model was serialized using `joblib` and deployed via Str
 
 Deployment ensures:
 
-- Feature order preservation  
-- Probability-based risk scoring  
-- Real-time inference  
+- Feature order preservation
+- Probability-based risk scoring
+- Real-time inference
 
 The deployed application allows fleet operators to input telemetry data and receive maintenance risk predictions instantly.
 
 ---
 
-## Repository Structure
+## 🚀 Getting Started
+
+Follow these steps to set up and run the application on your local machine.
+
+### 1. Fork the Repository
+
+- Click the **Fork** button at the top-right of this page.
+- Select your GitHub account to create a copy of this repository.
+
+### 2. Clone the Repository
+
+Open your terminal and run the following command (replace `[your-username]` with your actual GitHub username):
+
+```bash
+git clone https://github.com/[your-username]/vehicle_maintenance_dashboard.git
+cd vehicle_maintenance_dashboard
+```
+
+### 3. Set Up a Virtual Environment (Recommended)
+
+It's best practice to use a virtual environment to avoid dependency conflicts:
+
+```bash
+# Create the environment
+python -m venv venv
+
+# Activate it (Mac/Linux)
+source venv/bin/activate
+
+# Activate it (Windows)
+# venv\Scripts\activate
+```
+
+### 4. Install Dependencies
+
+Install all the required Python libraries:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Run the Application
+
+You can launch the application using:
+
+```bash
+streamlit run Home.py
+```
+
+---
+
+## 📂 Repository Structure
+
+```
+.
+├── Home.py               # Main landing page for the portal
+├── app.py                # Monolithic fallback prediction app
+├── requirements.txt      # Python dependencies
+├── assets/               # CSS styles and background images
+├── data/                 # Raw/Sample datasets
+├── models/               # Serialized XGBoost model artifacts
+├── pages/                # Streamlit sub-pages (EDA, Prediction, Insights)
+└── utils/                # Shared logic (preprocessor, model loader, ui)
+```
+
+---
+
+## 🛠️ Usage
+
+1. **Home**: High-level overview of the system.
+2. **Data Insights**: Interactive EDA including class balance and dynamic boxplots for outlier detection.
+3. **Model Insights**: Detailed breakdown of the engineered features and model strategy.
+4. **Prediction**: Live risk-scoring interface. Select your vehicle details and last service date to receive a pro-active maintenance recommendation.
