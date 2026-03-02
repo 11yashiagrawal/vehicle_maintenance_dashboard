@@ -1,0 +1,637 @@
+\documentclass[12pt, a4paper]{article}
+
+% -----------------------------
+% PACKAGES (FIXED VERSION)
+% -----------------------------
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[left=2.5cm, right=2.5cm, top=3cm, bottom=3cm]{geometry}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}   % <-- IMPORTANT
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{xcolor}     % <-- IMPORTANT
+\usepackage{listings}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{colortbl}
+
+% -----------------------------
+% COLORS
+% -----------------------------
+
+\definecolor{solarblue}{RGB}{31, 78, 121}
+\definecolor{solaramber}{RGB}{180, 100, 20}
+\definecolor{solargray}{RGB}{80, 80, 80}
+\definecolor{lightgray}{RGB}{245, 245, 245}
+\definecolor{codebg}{RGB}{248, 248, 248}
+
+% -----------------------------
+% SECTION STYLE
+% -----------------------------
+
+\titleformat{\section}{\large\bfseries\color{solarblue}}{}{0em}{\thesection\quad}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries\color{solaramber}}{}{0em}{\thesubsection\quad}
+\titleformat{\subsubsection}{\normalsize\itshape\color{solargray}}{}{0em}{\thesubsubsection\quad}
+
+% -----------------------------
+% HYPERREF
+% -----------------------------
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=solarblue,
+    urlcolor=solaramber,
+    citecolor=solarblue
+}
+
+% -----------------------------
+% HEADER / FOOTER
+% -----------------------------
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\small\textit{Vehicle Maintenance Prediction}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% -----------------------------
+% SPACING
+% -----------------------------
+
+\onehalfspacing
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+% ---------------------- TITLE PAGE ----------------------
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+
+    {\Large \textbf{PROJECT 6}}\\[1.2cm]
+
+    {\Huge\bfseries\color{solarblue}
+    Vehicle Maintenance Prediction}\\[0.5cm]
+
+    {\Large\bfseries\color{solaramber}
+    \& Agentic Fleet Management}\\[0.8cm]
+
+    \rule{\linewidth}{1.2pt}\\[0.8cm]
+
+    {\large From Predictive Maintenance to Autonomous Fleet Operations}
+
+    \vspace{1.5cm}
+
+    \begin{tabular}{l}
+        \textbf{Team Members:} \\
+        Milind Bansal \\
+        Isha Tomar \\
+        Yashi Agrawal \\
+        Mansi Agarwal \\
+    \end{tabular}
+
+    \vspace{1cm}
+
+    \textbf{Section:} D \\[0.2cm]
+    \textbf{Faculty:} Kartik Gupta
+
+    \vfill
+    \today
+\end{titlepage}
+\newpage
+
+% ---------------------- ABSTRACT ----------------------
+
+\begin{abstract}
+\noindent
+Modern fleet operations generate continuous streams of operational telemetry data including mileage, engine load, vibration, temperature, and environmental conditions. However, maintenance decisions are frequently based on fixed schedules or reactive breakdown-based strategies. These approaches fail to incorporate real-time operational stress and vehicle-specific conditions.
+
+This project presents an end-to-end supervised machine learning framework for predicting whether a vehicle requires maintenance. Unlike traditional binary classification problems, this task represents a risk-detection scenario where false negatives may result in breakdowns, downtime, financial loss, and safety hazards. Therefore, evaluation prioritizes recall, F1-score, and ROC-AUC over simple accuracy.
+
+The dataset consists of 15,000 structured vehicle records with 28 engineered and encoded features. Extensive exploratory data analysis, correlation study, outlier handling, and feature engineering were conducted before model training. Four classification models were implemented and compared: Logistic Regression, Decision Tree, Random Forest, and XGBoost.
+
+After hyperparameter optimization using RandomizedSearchCV, the tuned XGBoost classifier achieved an ROC-AUC of 0.92 and balanced minority-class recall performance. The final model was deployed using Streamlit for real-time maintenance risk prediction.
+
+This work demonstrates a complete predictive maintenance pipeline from data preprocessing to production deployment.
+\end{abstract}
+\newpage
+
+% ---------------------- CONTENTS ----------------------
+
+\tableofcontents
+\section{Introduction}
+
+Fleet maintenance is traditionally performed either at fixed service intervals or after mechanical failure occurs. Fixed scheduling ignores real operational stress, while reactive maintenance increases downtime and operational risk.
+
+The core problem addressed in this project is:
+
+\textit{Can historical vehicle telemetry data be used to proactively predict whether a vehicle requires maintenance?}
+
+This is not merely a classification problem; it is a risk-sensitive detection problem. A false negative — failing to detect required maintenance — may result in:
+
+\begin{itemize}
+\item Unexpected mechanical breakdown
+\item Operational downtime
+\item Increased repair costs
+\item Safety hazards
+\end{itemize}
+
+Therefore, evaluation metrics were selected to prioritize balanced performance rather than overall accuracy.
+\section{Dataset Description}
+
+The dataset consists of structured vehicle telemetry features collected from simulated fleet operations.
+
+\begin{table}[H]
+\centering
+\caption{Dataset Overview}
+\begin{tabular}{ll}
+\toprule
+Property & Value \\
+\midrule
+Total Samples & 15,000 \\
+Target Variable & Maintenance Required (0/1) \\
+Class Distribution & 75\% No Maintenance, 25\% Maintenance \\
+Raw Numerical Features & 10 \\
+Categorical Features & 5 \\
+Total Features After Encoding & 28 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Exploratory Data Analysis}
+
+\subsection{Feature Scale Variation}
+
+The statistical summary revealed significant variation in feature magnitudes. For example:
+
+\begin{itemize}
+\item Mileage ranged in tens of thousands.
+\item Battery voltage ranged within a narrow band.
+\item Vibration levels were tightly distributed.
+\end{itemize}
+
+This influenced the need for scaling in linear models.
+
+\subsection{Outlier Detection}
+
+Boxplot analysis revealed extreme upper tails in mileage and engine hours. Instead of removing these records, IQR-based capping was applied because high-usage vehicles represent realistic operational scenarios.
+
+\subsection{Class Imbalance}
+
+The dataset exhibited moderate imbalance (~75:25). Accuracy alone would therefore be misleading. For example, predicting all vehicles as "No Maintenance" yields 75\% accuracy without predictive power.
+
+Thus, Recall and F1-score were prioritized.
+
+\newpage
+\section{Feature Engineering}
+
+Raw telemetry features often fail to capture the interaction effects and operational intensity patterns that influence mechanical degradation. Therefore, domain-informed feature engineering was performed to transform primary signals into more meaningful stress indicators.
+
+\subsection{Rationale for Feature Engineering}
+
+Vehicle maintenance requirements are rarely triggered by a single variable in isolation. Instead, maintenance risk emerges from compounded operational stress, long-term wear, and environmental conditions. 
+
+For example:
+\begin{itemize}
+\item High mileage accumulated slowly over 10 years does not represent the same stress as high mileage accumulated within 2 years.
+\item High engine load under normal temperature may be acceptable, but high load combined with elevated temperature significantly accelerates wear.
+\end{itemize}
+
+Therefore, engineered interaction and ratio-based features were introduced.
+
+\subsection{Engineered Features}
+
+\begin{table}[H]
+\centering
+\caption{Engineered Feature Summary}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Feature} & \textbf{Rationale and Interpretation} \\
+\midrule
+\texttt{mileage\_per\_year} & Measures operational intensity rather than absolute mileage. Captures aggressive usage patterns relative to vehicle age. \\
+\texttt{engine\_hours\_per\_km} & Indicates engine workload per distance traveled. High values may reflect inefficient combustion or idle-heavy usage. \\
+\texttt{fault\_density} & Normalizes fault code frequency relative to engine hours, capturing recurring mechanical stress. \\
+\texttt{thermal\_stress} & Computed as oil temperature $\times$ engine load. Captures compounded thermal strain under high operational load. \\
+\texttt{load\_efficiency} & Ratio of engine load to fuel efficiency, reflecting mechanical strain relative to performance output. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Detailed Justification of Each Feature}
+
+\textbf{Mileage Per Year}
+
+\[
+\text{mileage\_per\_year} = \frac{\text{mileage\_km}}{\text{vehicle\_age\_years}}
+\]
+
+Two vehicles with identical mileage may experience different wear levels depending on usage rate. This feature captures operational intensity rather than cumulative distance alone.
+
+\textbf{Thermal Stress}
+
+\[
+\text{thermal\_stress} = \text{oil\_temp\_avg\_celsius} \times \text{engine\_load\_percent}
+\]
+
+Mechanical wear increases non-linearly when high load is combined with elevated temperature. Multiplication captures this interaction effect more effectively than treating both variables independently.
+
+\textbf{Engine Hours Per KM}
+
+\[
+\text{engine\_hours\_per\_km} = \frac{\text{engine\_hours}}{\text{mileage\_km}}
+\]
+
+High engine hours relative to distance traveled may indicate excessive idling or mechanical inefficiency, both of which contribute to maintenance risk.
+
+\textbf{Fault Density}
+
+\[
+\text{fault\_density} = \frac{\text{fault\_code\_count}}{\text{engine\_hours}}
+\]
+
+Normalizing fault codes by engine hours prevents bias toward older vehicles and captures recurrence frequency rather than raw count.
+
+\textbf{Load Efficiency}
+
+\[
+\text{load\_efficiency} = \frac{\text{engine\_load\_percent}}{\text{fuel\_efficiency\_kmpl}}
+\]
+
+This ratio reflects mechanical strain relative to output efficiency, helping detect vehicles operating under disproportionate stress.
+
+\subsection{Validation Through Feature Importance}
+
+After training tree-based models, feature importance rankings confirmed that \texttt{thermal\_stress}, \texttt{fault\_code\_count}, and \texttt{mileage\_per\_year} were among the most predictive variables, validating the engineering logic.
+
+Feature engineering therefore improved representation of latent stress factors and enhanced model discrimination capability.
+
+\newpage
+\section{Model Training and Selection Strategy}
+
+Rather than selecting a single algorithm arbitrarily, a progressive modelling approach was followed. The objective was to evaluate increasing levels of model complexity and understand the nature of the relationships within the data.
+
+\subsection{Train-Test Split}
+
+The dataset was divided into 80\% training and 20\% testing subsets using a fixed random seed for reproducibility. Stratified sampling was applied to preserve class distribution in both subsets.
+
+\subsection{Logistic Regression (Baseline Model)}
+
+Logistic Regression was selected as the baseline classifier due to its simplicity and interpretability. It assumes a linear relationship between input features and the log-odds of the target variable.
+
+\textbf{Reason for Inclusion:}
+\begin{itemize}
+\item Establishes minimum benchmark performance.
+\item Provides interpretability of feature influence.
+\item Tests whether linear separation is sufficient.
+\end{itemize}
+
+\textbf{Observed Limitation:}
+
+Although it achieved reasonable accuracy, recall for the maintenance class was lower. This indicated that the underlying relationships were not purely linear.
+
+\subsection{Decision Tree}
+
+Decision Trees were introduced to capture non-linear splits and hierarchical feature interactions.
+
+\textbf{Reason for Inclusion:}
+\begin{itemize}
+\item Captures non-linear boundaries.
+\item Requires no feature scaling.
+\item Provides interpretability via rule-based splits.
+\end{itemize}
+
+\textbf{Observed Limitation:}
+
+The single-tree model exhibited higher variance and reduced ROC-AUC compared to ensemble methods, indicating overfitting tendency.
+
+\subsection{Random Forest}
+
+Random Forest was implemented to reduce variance by averaging multiple decision trees trained on bootstrapped samples.
+
+\textbf{Reason for Inclusion:}
+\begin{itemize}
+\item Reduces overfitting through ensemble averaging.
+\item Handles feature interactions robustly.
+\item Performs strongly on structured tabular data.
+\end{itemize}
+
+\textbf{Observed Performance:}
+
+Random Forest improved stability and overall performance. However, recall for the minority maintenance class was slightly lower than the boosted alternative.
+
+\subsection{XGBoost (Final Model)}
+
+XGBoost is a gradient boosting algorithm that sequentially builds trees to correct residual errors from previous iterations.
+
+\textbf{Reason for Inclusion:}
+\begin{itemize}
+\item Reduces bias through boosting.
+\item Handles complex non-linear relationships.
+\item Includes built-in regularization.
+\item Effective for imbalanced classification tasks.
+\end{itemize}
+
+\textbf{Why XGBoost Was Selected:}
+\subsubsection{Hyperparameter Optimization Strategy}
+
+Hyperparameter tuning was performed using \texttt{RandomizedSearchCV} instead of exhaustive Grid Search. Randomized search allows exploration of a broader hyperparameter space while maintaining computational efficiency. 
+
+The tuning process optimized for F1-score to ensure balanced precision-recall tradeoff under class imbalance. Parameters such as:
+
+\begin{itemize}
+    \item Number of estimators
+    \item Maximum tree depth
+    \item Learning rate
+    \item Subsample ratio
+    \item \texttt{scale\_pos\_weight}
+\end{itemize}
+
+were evaluated using 3-fold cross-validation. The inclusion of \texttt{scale\_pos\_weight} specifically addressed minority-class imbalance by penalizing false negatives more heavily.
+
+\subsection{Model Comparison Summary}
+
+\begin{table}[H]
+\centering
+\caption{Model Performance Comparison}
+\begin{tabular}{lcccc}
+\toprule
+Model & Accuracy & Recall & F1-Score & ROC-AUC \\
+\midrule
+Logistic Regression & 0.84 & 0.60 & 0.68 & 0.92 \\
+Decision Tree & 0.83 & 0.60 & 0.66 & 0.85 \\
+Random Forest & 0.85 & 0.58 & 0.70 & 0.91 \\
+\rowcolor{solarblue!8}
+XGBoost (Tuned) & \textbf{0.85} & \textbf{0.76} & \textbf{0.78} & \textbf{0.92} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The tuned XGBoost classifier provided the most balanced performance and was therefore deployed.
+\newpage
+\section{Model Evaluation}
+
+Model evaluation was conducted on the held-out test dataset using multiple classification metrics. Since the problem involves moderate class imbalance (approximately 75:25), relying solely on accuracy would be misleading.
+
+Therefore, evaluation included:
+
+\begin{itemize}
+\item Accuracy
+\item Precision
+\item Recall
+\item F1-Score
+\item ROC-AUC
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+\textbf{Accuracy}
+
+\[
+\text{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
+\]
+
+Measures overall correctness but may hide poor minority-class detection.
+
+\textbf{Precision}
+
+\[
+\text{Precision} = \frac{TP}{TP + FP}
+\]
+
+Indicates how many predicted maintenance cases were correct.
+
+\textbf{Recall}
+
+\[
+\text{Recall} = \frac{TP}{TP + FN}
+\]
+
+Measures ability to correctly detect vehicles requiring maintenance. This is critical because false negatives lead to operational risk.
+
+\textbf{F1-Score}
+
+\[
+F1 = 2 \times \frac{Precision \times Recall}{Precision + Recall}
+\]
+
+Balances precision and recall.
+
+\textbf{ROC-AUC}
+
+Measures the model's ability to distinguish between classes across all thresholds.
+
+\subsection{Model Performance Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Test Set Performance Comparison}
+\begin{tabular}{lccccc}
+\toprule
+Model & Accuracy & Precision & Recall & F1-Score & ROC-AUC \\
+\midrule
+Logistic Regression & 0.84 & 0.76 & 0.60 & 0.68 & 0.92 \\
+Decision Tree & 0.83 & 0.73 & 0.60 & 0.66 & 0.85 \\
+Random Forest & 0.85 & 0.78 & 0.58 & 0.70 & 0.91 \\
+\rowcolor{solarblue!8}
+XGBoost (Tuned) & \textbf{0.85} & \textbf{0.80} & \textbf{0.76} & \textbf{0.78} & \textbf{0.92} \\
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{Overfitting Assessment}
+
+To evaluate model generalization capability, training and testing F1-scores were compared for the final tuned XGBoost classifier.
+
+\begin{table}[H]
+\centering
+\caption{Training vs Testing Performance (XGBoost)}
+\begin{tabular}{lcc}
+\toprule
+Metric & Training Set & Testing Set \\
+\midrule
+Accuracy & 0.88 & 0.85 \\
+F1-Score & 0.82 & 0.78 \\
+ROC-AUC & 0.94 & 0.92 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The relatively small gap between training and testing performance indicates controlled variance and stable generalization. The model does not exhibit severe overfitting, suggesting that the chosen hyperparameters and regularization mechanisms are appropriate.
+\subsection{Performance Analysis and Final Model Selection}
+
+Although Random Forest and XGBoost achieved similar overall accuracy, deeper inspection of recall and F1-score revealed meaningful differences.
+
+\begin{itemize}
+\item Logistic Regression performed well in ROC-AUC but struggled with recall, indicating limitations of linear decision boundaries.
+\item Decision Tree exhibited higher variance and lower ROC-AUC, suggesting instability.
+\item Random Forest improved overall robustness but still showed moderate minority-class recall.
+\item XGBoost achieved significantly higher recall (0.76), meaning it successfully identified a greater proportion of vehicles requiring maintenance.
+\end{itemize}
+
+In predictive maintenance applications, false negatives are more costly than false positives. Missing a required maintenance case may lead to breakdown, downtime, and financial loss. Therefore, higher recall was prioritized.
+
+XGBoost also maintained strong ROC-AUC (0.92), indicating consistent class separability across thresholds.
+
+Based on balanced performance across recall, F1-score, and ROC-AUC, the tuned XGBoost classifier was selected as the final deployment model.
+\newpage
+\section{Deployment Architecture}
+
+The final tuned XGBoost model was deployed using Streamlit to enable real-time prediction.
+
+\subsection{Model Serialization}
+
+After training and hyperparameter tuning, the model was serialized using the \texttt{joblib} library:
+
+\begin{itemize}
+\item \texttt{vehicle\_model.joblib}
+\item \texttt{features.csv}
+\end{itemize}
+
+Serialization ensures that the exact trained model parameters are preserved and can be reused in production without retraining.
+
+\subsection{Feature Order Preservation}
+
+Machine learning models depend strictly on feature order. During deployment, it is essential that:
+
+\begin{itemize}
+\item Input features are arranged in the exact same order as training.
+\item One-hot encoded categorical variables match training column names.
+\end{itemize}
+
+To guarantee consistency, the list of feature names was exported and used inside the Streamlit application to construct prediction vectors in the correct order.
+
+\subsection{Streamlit User Interface}
+
+The Streamlit application provides:
+
+\begin{itemize}
+\item Numeric input fields for operational telemetry
+\item Dropdown menus for categorical variables
+\item Real-time maintenance risk prediction
+\item Probability output instead of binary-only decision
+\end{itemize}
+
+This allows fleet operators to simulate scenarios and assess maintenance risk dynamically.
+
+\subsection{Probability-Based Output}
+Although a default classification threshold of 0.5 was used during evaluation, the deployment architecture outputs calibrated probabilities. This enables dynamic threshold adjustment depending on operational risk tolerance. 
+
+For example:
+\begin{itemize}
+    \item Lower threshold → prioritize recall and reduce false negatives.
+    \item Higher threshold → prioritize precision and reduce false positives.
+\end{itemize}
+
+This flexibility allows the system to adapt to varying fleet risk management policies.
+\subsection{System Architecture}
+
+Figure~\ref{fig:architecture} illustrates the complete supervised machine learning pipeline, beginning from raw fleet telemetry ingestion to real-time maintenance risk prediction through Streamlit deployment.
+
+The architecture follows a structured progression:
+
+\begin{itemize}
+    \item Raw fleet telemetry input
+    \item Exploratory Data Analysis and statistical validation
+    \item Domain-informed feature engineering
+    \item Encoding and selective scaling
+    \item Stratified train-test split
+    \item Progressive model comparison
+    \item Hyperparameter optimization
+    \item Production deployment with probability-based output
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{diagram}
+    \caption{End-to-End Vehicle Maintenance Prediction Pipeline}
+    \label{fig:architecture}
+\end{figure}
+\newpage
+\section{Repository Structure}
+
+\begin{table}[H]
+\centering
+\caption{Project Directory Layout}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Directory / File} & \textbf{Purpose} \\
+\midrule
+data/ & Raw and processed datasets \\
+notebooks/ & Colab experimentation and EDA notebooks \\
+models/ & Serialized trained models (.joblib) \\
+app.py & Streamlit application file \\
+features.csv & Preserved feature order for deployment \\
+requirements.txt & Deployment dependencies \\
+README.md & Project documentation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+\newpage
+\section{Technology Stack}
+
+\begin{table}[H]
+\centering
+\caption{Technology Stack Overview}
+\begin{tabular}{ll}
+\toprule
+\textbf{Layer} & \textbf{Technology} \\
+\midrule
+Data Processing & pandas, NumPy \\
+Visualization & matplotlib, seaborn \\
+Machine Learning & scikit-learn, XGBoost \\
+Hyperparameter Tuning & RandomizedSearchCV \\
+Model Persistence & joblib \\
+Deployment Framework & Streamlit \\
+Version Control & Git, GitHub \\
+Cloud Hosting & Streamlit Cloud \\
+\bottomrule
+\end{tabular}
+\end{table}
+\section{Conclusion}
+
+\begin{center}
+\colorbox{solarblue!8}{\parbox{0.9\textwidth}{\centering
+\textbf{\color{solarblue}Key Result:} Tuned XGBoost achieved ROC-AUC of 0.92 with balanced minority-class recall, demonstrating strong predictive capability for proactive fleet maintenance.
+}}
+\end{center}
+
+This project demonstrates a complete supervised machine learning pipeline including data preprocessing, feature engineering, model comparison, hyperparameter optimization, and production deployment.
+\section{Team Contribution}
+
+The project was developed collaboratively with clearly distributed responsibilities across data processing, modeling, documentation, and deployment components.
+
+\begin{table}[H]
+\centering
+\caption{Team Contribution Breakdown}
+\begin{tabular}{p{4cm} p{10cm}}
+\toprule
+\textbf{Team Member} & \textbf{Role and Responsibilities} \\
+\midrule
+
+Milind Bansal & Co-developed the machine learning pipeline in Google Colab, implemented baseline and ensemble models, and assisted in evaluation metric analysis and model comparison. \\
+
+Isha Tomar & Led exploratory data analysis, correlation study, feature engineering, and performance evaluation in Google Colab. Co-developed machine learning models, and authored the final technical report. \\
+
+
+Yashi Agrawal & Designed and implemented the Streamlit deployment application, integrated the trained model for inference, and produced the project demonstration video. \\
+
+Mansi Agarwal & Assisted in preliminary report drafting and documentation formatting support. \\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+The analytical modeling phase was jointly executed in Google Colab, while deployment and presentation components were developed separately to enable real-time maintenance risk prediction and system demonstration.
+\end{document}
