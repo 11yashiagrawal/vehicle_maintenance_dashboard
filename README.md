@@ -6,7 +6,7 @@ The pipeline performs exploratory data analysis, feature engineering, multi-mode
 > **Live Demo:** [[Deployed Web App]](https://vehicle-maintenance-dashboard.streamlit.app/)  
 > **Project Video:** [[Project Demo Link]](https://drive.google.com/file/d/1Zo7nhaxWIxzFFTYz8joRYZw6oG889lui/view?usp=drive_link)
 > **Colab Notebook Link:** [[Google Colab Notebook]](https://colab.research.google.com/drive/1GCYD7v7glAUhZDgZqOBbnpfGuIdSKBGr?usp=sharing)
-> **Project Report:** [Project Report Link]
+> **Project Report:** [[Project Report Link]](https://www.overleaf.com/read/rbhqrfcnfrdc#e72772)
 
 ---
 
@@ -77,7 +77,7 @@ The following engineered features were introduced:
 | load_efficiency           | Stress relative to performance |
 | days_since_last_service   | Time since last service        |
 
-Feature importance analysis confirmed the predictive value of these transformations.
+Feature importance analysis from XGBoost confirmed that engineered interaction features such as `thermal_stress` and `fault_density` ranked among the top contributors, validating the domain-driven design approach.
 
 ---
 
@@ -101,8 +101,17 @@ A progressive modelling approach was followed:
 | Random Forest       | 0.85     | 0.78      | 0.58     | 0.70     | 0.91     |
 | **XGBoost (Tuned)** | **0.85** | **0.80**  | **0.76** | **0.78** | **0.92** |
 
-XGBoost was selected due to its superior recall and balanced performance across evaluation metrics.
+## Why XGBoost?
 
+XGBoost was selected because:
+
+- It captures non-linear interactions efficiently.
+- It handles feature interactions automatically.
+- Built-in regularization reduces overfitting.
+- scale_pos_weight improves imbalance handling.
+- It achieved the highest ROC-AUC and Recall among all models.
+
+This makes it particularly suited for predictive maintenance risk detection.
 ---
 
 ## Hyperparameter Optimization
@@ -132,7 +141,22 @@ Deployment ensures:
 The deployed application allows fleet operators to input telemetry data and receive maintenance risk predictions instantly.
 
 ---
+---
 
+## System Architecture
+
+The end-to-end pipeline follows this structured workflow:
+
+1. Raw Fleet Telemetry Data  
+2. Data Cleaning & Missing Value Treatment  
+3. Feature Engineering  
+4. Stratified Train-Test Split  
+5. Progressive Model Comparison  
+6. Hyperparameter Tuning (RandomizedSearchCV)  
+7. Model Serialization (joblib)  
+8. Streamlit Deployment with Real-time Inference  
+
+The deployed application ensures consistent preprocessing and feature order preservation during inference.
 ## 🚀 Getting Started
 
 Follow these steps to set up and run the application on your local machine.
@@ -183,23 +207,35 @@ streamlit run Home.py
 ```
 
 ---
+## Technology Stack
+
+| Layer            | Technology Used |
+|------------------|-----------------|
+| Data Processing  | pandas, numpy   |
+| Visualization    | matplotlib, seaborn |
+| Modeling         | scikit-learn, XGBoost |
+| Optimization     | RandomizedSearchCV |
+| Deployment       | Streamlit |
+| Serialization    | joblib |
 
 ## 📂 Repository Structure
 
-```
-.
-├── Home.py               # Main landing page for the portal
-├── app.py                # Monolithic fallback prediction app
-├── requirements.txt      # Python dependencies
-├── assets/               # CSS styles and background images
-├── data/                 # Raw/Sample datasets
-├── models/               # Serialized XGBoost model artifacts
-├── pages/                # Streamlit sub-pages (EDA, Prediction, Insights)
-└── utils/                # Shared logic (preprocessor, model loader, ui styling)
-└── .streamlit/
-    └── config.toml/      # Configuration of global colors and font      
-```
-
+vehicle_maintenance_dashboard/
+│
+├── assets/            # Static files (CSS, images)
+├── data/              # Datasets used for training and inference
+├── models/            # Serialized trained model artifacts
+├── pages/             # Streamlit multi-page application modules
+├── utils/             # Shared preprocessing and model utilities
+├── report/            # Final project report (LaTeX + PDF)
+├── walkthrough/       # Complete ML development notebook
+├── .streamlit/        # Streamlit configuration
+├── .devcontainer/     # Development container setup
+│
+├── Home.py            # Main Streamlit entry point
+├── app.py             # Alternative / fallback app interface
+├── requirements.txt   # Project dependencies
+└── README.md          # Project documentation
 ---
 
 ## 🛠️ Usage
