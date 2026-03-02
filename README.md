@@ -6,6 +6,7 @@ The pipeline performs exploratory data analysis, feature engineering, multi-mode
 > **Live Demo:** [[Deployed Web App]](https://vehicle-maintenance-dashboard.streamlit.app/)  
 > **Project Video:** [[Project Demo Link]](https://drive.google.com/file/d/1Zo7nhaxWIxzFFTYz8joRYZw6oG889lui/view?usp=drive_link)
 > **Colab Notebook Link:** [[Google Colab Notebook]](https://colab.research.google.com/drive/1GCYD7v7glAUhZDgZqOBbnpfGuIdSKBGr?usp=sharing)
+> **Project Report:** [Project Report Link]
 
 ---
 
