@@ -1,6 +1,21 @@
-streamlit
-scikit-learn
+# Core ML
 pandas
 numpy
-joblib
+scikit-learn
 xgboost
+joblib
+
+# App
+streamlit
+
+# RAG + Agentic AI
+langchain
+langchain-community
+langchain-huggingface
+langgraph
+faiss-cpu
+sentence-transformers
+
+# Optional (used internally but safe)
+transformers
+torch

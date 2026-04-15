@@ -1,0 +1,51 @@
+VEHICLE USAGE & AGE
+Mileage (km) reflects total usage. High mileage vehicles experience increased wear and require more frequent maintenance.
+Vehicle age combined with mileage helps distinguish between gradual aging and aggressive usage.
+Engine hours indicate total engine operation. High engine hours with low mileage suggests inefficient usage or excessive idling.
+---
+THERMAL & LOAD STRESS
+Engine load above 80% represents high operational stress.
+Oil temperature above 110°C combined with high engine load indicates severe thermal stress and accelerated engine wear.
+Thermal stress (temperature × load) is a strong indicator of engine degradation.
+---
+FAULT & FAILURE SIGNALS
+Fault code count represents system errors. High fault counts indicate instability in subsystems.
+Fault density (faults per engine hour) provides normalized failure frequency and is a critical predictor of breakdown.
+Vehicles with recurring faults require immediate diagnostic inspection.
+---
+EFFICIENCY & PERFORMANCE
+Fuel efficiency (kmpl) reflects combustion quality. Low efficiency under high load suggests internal engine wear or inefficiency.
+Engine hours per km is a performance indicator. Higher values indicate poor efficiency and increased mechanical strain.
+Load efficiency (engine load / fuel efficiency) reflects stress relative to output.
+---
+MAINTENANCE HISTORY
+Days since last service is a key predictor of failure risk.
+Vehicles not serviced for more than 180 days have significantly higher breakdown probability.
+Preventive maintenance reduces long-term operational risk.
+---
+BATTERY & ELECTRICAL SYSTEM
+Battery voltage below 11.5V indicates battery degradation and possible failure.
+Healthy battery voltage ranges between 12.4V and 12.7V.
+---
+VIBRATION & MECHANICAL HEALTH
+High vibration levels indicate imbalance, misalignment, or worn components.
+Persistent vibration increases structural stress and accelerates component failure.
+---
+ENVIRONMENTAL & OPERATING CONDITIONS
+Road condition (urban, rural, highway) affects wear patterns. Rough roads increase mechanical stress.
+Weather conditions (hot, cold, humid) impact engine performance and component lifespan.
+Hot weather increases overheating risk and thermal stress.
+Cold weather affects battery efficiency and startup performance.
+---
+VEHICLE TYPE & FUEL TYPE
+Heavy vehicles (trucks, buses) experience higher load stress and require more frequent maintenance.
+Electric vehicles have different failure patterns compared to combustion engines.
+Fuel type impacts efficiency, wear, and maintenance cycles.
+---
+REAL-WORLD MAINTENANCE GUIDELINES
+According to general automotive standards, engine oil temperatures above 110°C are considered high and may lead to lubrication breakdown and increased wear.
+Preventive maintenance schedules typically recommend servicing vehicles every 3 to 6 months depending on usage intensity.
+High engine vibration is a common indicator of mechanical imbalance, misalignment, or worn components.
+Battery voltage below 12V indicates potential degradation and risk of failure.
+Frequent fault codes are often associated with deeper system issues and should not be ignored.
+
