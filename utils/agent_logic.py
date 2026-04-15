@@ -11,140 +11,141 @@ def analyze_vehicle(input_data):
     result = predict_risk(input_data)
     risk = result["risk_probability"]
 
-    label = "HIGH" if risk > 0.7 else "MEDIUM" if risk > 0.4 else "LOW"
+    if risk > 0.7:
+        label = "HIGH"
+    elif risk > 0.4:
+        label = "MEDIUM"
+    else:
+        label = "LOW"
 
-    print("STEP 2: Building intelligent signals")
-
-    # =========================
-    # 🔥 CENTRAL RULE ENGINE
-    # =========================
-    issues_config = [
-        {
-            "condition": input_data["oil_temp_avg_celsius"] > 110,
-            "label": "Thermal Stress",
-            "query": "high engine temperature thermal stress overheating",
-            "explanation": "Engine temperature is critically high (>110°C)"
-        },
-        {
-            "condition": input_data["engine_load_percent"] > 80 and input_data["oil_temp_avg_celsius"] > 100,
-            "label": "Overloading Stress",
-            "query": "thermal stress high engine load overheating",
-            "explanation": "High engine load combined with temperature increases wear"
-        },
-        {
-            "condition": input_data["vibration_level"] > 7,
-            "label": "Mechanical Vibration",
-            "query": "high vibration mechanical imbalance engine wear",
-            "explanation": "High vibration detected indicating mechanical imbalance"
-        },
-        {
-            "condition": input_data["battery_voltage"] < 11.5,
-            "label": "Battery Failure Risk",
-            "query": "low battery voltage electrical failure battery degradation",
-            "explanation": "Battery voltage is low (<11.5V)"
-        },
-        {
-            "condition": input_data["fault_code_count"] > 10,
-            "label": "System Fault Instability",
-            "query": "frequent fault codes system instability failure risk",
-            "explanation": "Frequent fault codes detected"
-        },
-        {
-            "condition": input_data["fuel_efficiency_kmpl"] < 10,
-            "label": "Low Fuel Efficiency",
-            "query": "poor fuel efficiency engine inefficiency performance loss",
-            "explanation": "Fuel efficiency is low (<10 kmpl)"
-        },
-        {
-            "condition": input_data["days_since_last_service"] > 180,
-            "label": "Delayed Maintenance",
-            "query": "delayed maintenance high breakdown risk service overdue",
-            "explanation": "Maintenance overdue (>180 days)"
-        },
-        {
-            "condition": input_data["mileage_km"] > 200000,
-            "label": "High Vehicle Wear",
-            "query": "high mileage vehicle wear and tear aging components",
-            "explanation": "Very high mileage indicating wear and tear"
-        }
-    ]
+    print("STEP 2: Detecting issues")
 
     # =========================
-    # STEP 2: Extract Signals
+    # STEP 2: Detect Issues (Single Source of Truth)
     # =========================
-    signals = []
-    clean_issues = []
-    explanations = []
+    issues = []
 
-    for issue in issues_config:
-        if issue["condition"]:
-            signals.append(issue["query"])
-            clean_issues.append(issue["label"])
-            explanations.append(issue["explanation"])
+    if input_data["oil_temp_avg_celsius"] > 110:
+        issues.append("Thermal Stress")
 
-    query = " ".join(signals)
+    if input_data["engine_load_percent"] > 80 and input_data["oil_temp_avg_celsius"] > 100:
+        if "Thermal Stress" not in issues:
+            issues.append("Thermal Stress")
 
-    print("STEP 3: Query ->", query)
+    if input_data["vibration_level"] > 7:
+        issues.append("Mechanical Vibration")
+
+    if input_data["battery_voltage"] < 11.5:
+        issues.append("Battery Failure Risk")
+
+    if input_data["fault_code_count"] > 10:
+        issues.append("System Fault Instability")
+
+    if input_data["fuel_efficiency_kmpl"] < 10:
+        issues.append("Low Fuel Efficiency")
+
+    if input_data["days_since_last_service"] > 180:
+        issues.append("Delayed Maintenance")
+
+    if input_data["mileage_km"] > 200000:
+        issues.append("High Vehicle Wear")
+
+    print("Detected Issues:", issues)
 
     # =========================
-    # STEP 3: Retrieve Knowledge
+    # STEP 3: Optional RAG (for enrichment only)
     # =========================
     retriever = load_retriever()
-    print("STEP 4: Retriever loaded")
+    query = " ".join(issues)
 
     docs = retriever.invoke(query)
-
-    # 🔥 Smart scoring (better than basic filtering)
-    scored_docs = []
-
-    keywords = [w for w in query.split() if w not in ["high", "low", "engine", "stress"]]
-
-    for doc in docs:
-        content = doc.page_content.lower()
-        score = sum(word in content for word in keywords)
-        scored_docs.append((score, doc))
-
-    scored_docs.sort(reverse=True, key=lambda x: x[0])
-
-    filtered_docs = [doc for score, doc in scored_docs if score > 1]
-
-    insights = [doc.page_content for doc in filtered_docs[:3]]
-
-    print("STEP 5: Retrieved relevant insights")
+    rag_context = " ".join([doc.page_content for doc in docs[:2]])
 
     # =========================
-    # STEP 4: Build Action Plan
+    # STEP 4: Build Professional Action Plan
     # =========================
     action_plan = []
 
-    for insight in insights:
-        issue_title = insight.split("\n")[0]
+    for issue in issues:
 
+        # -------------------------
+        # Issue-specific logic
+        # -------------------------
+        if issue == "Thermal Stress":
+            description = f"Engine temperature ({input_data['oil_temp_avg_celsius']}°C) is critically high under load ({input_data['engine_load_percent']}%)"
+            action = "Inspect cooling system, radiator, and engine oil immediately"
+
+        elif issue == "Mechanical Vibration":
+            description = f"High vibration level detected ({input_data['vibration_level']}) indicating imbalance or wear"
+            action = "Check engine mounts, shaft alignment, and rotating components"
+
+        elif issue == "Battery Failure Risk":
+            description = f"Battery voltage is low ({input_data['battery_voltage']}V)"
+            action = "Test battery health and replace if necessary"
+
+        elif issue == "System Fault Instability":
+            description = f"{input_data['fault_code_count']} fault codes detected indicating system instability"
+            action = "Run full diagnostics and resolve critical faults"
+
+        elif issue == "Low Fuel Efficiency":
+            description = f"Fuel efficiency is low ({input_data['fuel_efficiency_kmpl']} kmpl)"
+            action = "Inspect fuel injectors, filters, and engine tuning"
+
+        elif issue == "Delayed Maintenance":
+            description = f"Vehicle not serviced for {input_data['days_since_last_service']} days"
+            action = "Perform complete preventive maintenance service"
+
+        elif issue == "High Vehicle Wear":
+            description = f"High mileage detected ({input_data['mileage_km']} km)"
+            action = "Inspect major components and plan replacements"
+
+        else:
+            description = "General degradation detected"
+            action = "Perform full inspection"
+
+        # -------------------------
+        # Context Awareness (🔥 KEY IMPROVEMENT)
+        # -------------------------
+        context_note = (
+            f"Vehicle Type: {input_data['vehicle_type']}, "
+            f"Fuel: {input_data['fuel_type']}, "
+            f"Operating in {input_data['weather_condition']} weather on "
+            f"{input_data['road_condition']} roads increases stress on components."
+        )
+
+        # -------------------------
+        # Priority Logic
+        # -------------------------
         if risk > 0.7:
             priority = "Immediate"
-            timeline = "Within 2 days"
+            timeline = "Within 24-48 hours"
         elif risk > 0.4:
             priority = "High"
             timeline = "Within 1 week"
         else:
             priority = "Moderate"
-            timeline = "Monitor"
+            timeline = "Routine monitoring"
 
+        # -------------------------
+        # Final structured issue
+        # -------------------------
         action_plan.append({
-            "issue": insight,
+            "issue": issue,
+            "description": description,
+            "context": context_note,
+            "recommended_action": action,
             "priority": priority,
             "timeline": timeline
         })
 
-    print("STEP 6: Returning result")
+    print("STEP 5: Final Output Ready")
 
     # =========================
     # FINAL OUTPUT
     # =========================
     return {
         "risk_level": label,
-        "risk_score": risk,
-        "key_issues": clean_issues,
-        "explanations": explanations,
+        "risk_score": round(risk, 2),
+        "key_issues": issues,
         "action_plan": action_plan
     }
