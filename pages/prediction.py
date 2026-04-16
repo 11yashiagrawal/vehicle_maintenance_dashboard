@@ -1,7 +1,7 @@
 import streamlit as st
 from utils.model_loader import load_artifacts, load_sample_data
 from utils.preprocessor import build_input_form_grid
-from utils.langgraph_agent import build_agent
+from utils.model_tool import predict_risk
 from utils.ui_utils import apply_full_page_background, inject_custom_css
 
 st.set_page_config(page_title="Vehicle Maintenance Predictor", page_icon="🚗", layout="wide")
@@ -42,100 +42,7 @@ div.stButton > button[kind="primary"]:hover * {
 div.stButton > button[kind="primary"]:active {
     transform: scale(0.98) !important;
 }
-
-.report-card {
-    background: rgba(8, 18, 24, 0.82);
-    border: 1px solid rgba(0, 255, 255, 0.18);
-    border-radius: 16px;
-    padding: 1rem 1.1rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-}
-
-.report-card h3, .report-card h4 {
-    margin-top: 0;
-}
-
-.issue-chip {
-    display: inline-block;
-    margin: 0.2rem 0.35rem 0.2rem 0;
-    padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(0, 255, 255, 0.12);
-    border: 1px solid rgba(0, 255, 255, 0.35);
-    color: #dffefe;
-    font-size: 0.92rem;
-}
 """)
-
-
-@st.cache_resource
-def load_agent():
-    return build_agent()
-
-
-def render_issue_chips(issues: list[str]) -> None:
-    chips = "".join(
-        f"<span class='issue-chip'>{issue.replace('_', ' ').title()}</span>"
-        for issue in issues
-    )
-    st.markdown(chips, unsafe_allow_html=True)
-
-
-def render_action_plan(action_plan: list[dict]) -> None:
-    st.subheader("🛠 Action Plan")
-    for index, item in enumerate(action_plan, start=1):
-        st.markdown(
-            f"""
-            <div class="report-card">
-                <h4>{index}. {item.get("issue", "Recommended Action")}</h4>
-                <p><strong>Why it matters:</strong> {item.get("reason", "No reason provided.")}</p>
-                <p><strong>Context impact:</strong> {item.get("context_impact", "No contextual impact provided.")}</p>
-                <p><strong>Recommended action:</strong> {item.get("action", "No action provided.")}</p>
-                <p><strong>Priority:</strong> {item.get("priority", "Unknown")} | <strong>Timeline:</strong> {item.get("timeline", "Not specified")}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-
-def render_report(report: dict) -> None:
-    risk_prediction = report.get("risk_prediction", 0)
-    risk_score = float(report.get("risk_score", 0.0))
-    risk_level = str(report.get("risk_level", "UNKNOWN"))
-    key_issues = report.get("key_issues", [])
-
-    col1, col2, col3 = st.columns([1.2, 1, 1])
-    with col1:
-        if risk_prediction == 1 or risk_level.upper() == "HIGH":
-            st.error("🔴 **Maintenance Required**")
-        elif risk_level.upper() == "MEDIUM":
-            st.warning("🟠 **Maintenance Attention Needed**")
-        else:
-            st.success("🟢 **No Immediate Maintenance Needed**")
-    with col2:
-        st.metric("Risk", f"{risk_score:.1%}")
-    with col3:
-        st.metric("Risk Level", risk_level.title())
-
-    st.subheader("🔍 Key Issues")
-    render_issue_chips(key_issues)
-
-    render_action_plan(report.get("action_plan", []))
-
-    with st.expander("📚 Retrieved Maintenance Guidance"):
-        contexts = report.get("retrieved_context", [])
-        if contexts:
-            for idx, context in enumerate(contexts, start=1):
-                st.markdown(f"**Guidance {idx}**")
-                st.write(context)
-                if idx != len(contexts):
-                    st.markdown("---")
-        else:
-            st.info("No maintenance guidance was retrieved for this case.")
-
-    with st.expander("🧾 Raw Agent Output"):
-        st.json(report)
 
 st.markdown("""
 <h1 style='font-size: 80px; text-shadow: 0 0 10px rgba(0,255,255,0.5);'>🔮 Live Maintenance Prediction</h1>
@@ -143,7 +50,6 @@ st.markdown("""
 st.caption("Use the controls below to estimate maintenance risk based on live vehicle diagnostics.")
 
 _, _, features = load_artifacts()
-agent = load_agent()
 
 predict_clicked = st.button("🔍 Click to Predict Maintenance", type="primary")
 result_container = st.container()
@@ -154,11 +60,22 @@ input_data = build_input_form_grid(features, num_cols=2, use_sidebar=False)
 
 if predict_clicked:
     with st.spinner("Running prediction..."):
-        agent_state = agent.invoke({"input_data": input_data})
-        report = agent_state["result"]
+        result = predict_risk(input_data)
+        prediction = result["risk_prediction"]
+        risk_score = result["risk_probability"]
+        risk_label = result["risk_label"]
 
     with result_container:
-        render_report(report)
+        col1, col2, col3 = st.columns([1.2, 1, 1])
+        with col1:
+            if prediction == 1:
+                st.error("🔴 *Maintenance Required*")
+            else:
+                st.success("🟢 *No Immediate Maintenance Needed*")
+        with col2:
+            st.metric("Risk", f"{risk_score:.1%}")
+        with col3:
+            st.metric("Risk Level", risk_label.title())
 
 st.markdown("---")
 
@@ -167,4 +84,4 @@ with st.expander("📋 Sample data used during development"):
     if df_sample is not None:
         st.dataframe(df_sample.head())
     else:
-        st.info("Add `data/sample_data.csv` to view a sample of the training data.")
+        st.info("Add data/sample_data.csv to view a sample of the training data.")
