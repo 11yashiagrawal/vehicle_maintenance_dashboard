@@ -2,7 +2,16 @@ from typing import Any, Dict, List
 import numpy as np
 import streamlit as st
 from datetime import date
-from utils.config import CATEGORICAL_OPTIONS, CAT_ENCODINGS, CALCULATED_FEATURES, NUMERIC_FEATURE_META
+import pandas as pd
+
+from utils.config import (
+    CATEGORICAL_OPTIONS,
+    CAT_ENCODINGS,
+    CALCULATED_FEATURES,
+    INPUT_CATEGORICAL_FEATURES,
+    INPUT_NUMERIC_FEATURES,
+    NUMERIC_FEATURE_META,
+)
 
 def _get_feature_label(feature: str) -> str:
     meta = NUMERIC_FEATURE_META.get(feature, {})
@@ -31,7 +40,6 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     ui = st.sidebar if use_sidebar else st
     
     encoded_cols = set(CAT_ENCODINGS.keys())
-    excluded_features = encoded_cols.union(set(CALCULATED_FEATURES))
     
     ui.header("🔧 Vehicle Diagnostics")
     num_cols = max(1, num_cols)
@@ -86,52 +94,67 @@ def calculate_internal_features(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     data = input_data.copy()
 
-    
-    service_date = data.get("last_service_date", date.today())
-    if isinstance(service_date, str):
-        
-        service_date = date.fromisoformat(service_date)
-    
-    delta = date.today() - service_date
-    data["days_since_last_service"] = max(0, delta.days)
-
     mileage = float(data.get("mileage_km", 0))
     age = float(data.get("vehicle_age_years", 1))
-    data["mileage_per_year"] = mileage / max(age, 1e-6)
-    
+    hours = float(data.get("engine_hours", 0))
     oil_temp = float(data.get("oil_temp_avg_celsius", 0))
     load = float(data.get("engine_load_percent", 0))
-    data["thermal_stress"] = oil_temp * load
-    
-    hours = float(data.get("engine_hours", 0))
-    data["engine_hours_per_km"] = hours / max(mileage, 1e-6)
-    
     faults = float(data.get("fault_code_count", 0))
-    data["fault_density"] = faults / max(hours, 1e-6)
-    
     efficiency = float(data.get("fuel_efficiency_kmpl", 1))
-    data["load_efficiency"] = load / max(efficiency, 1e-6)
-    
+
+    if "days_since_last_service" in data and data["days_since_last_service"] is not None:
+        data["days_since_last_service"] = max(0, int(float(data["days_since_last_service"])))
+    else:
+        service_date = data.get("last_service_date", date.today())
+        if isinstance(service_date, str):
+            service_date = date.fromisoformat(service_date)
+
+        delta = date.today() - service_date
+        data["days_since_last_service"] = max(0, delta.days)
+
+    # Keep feature engineering consistent across the Streamlit app and agent pipeline.
+    data["mileage_per_year"] = mileage / (age + 1)
+    data["thermal_stress"] = oil_temp * load
+    data["engine_hours_per_km"] = hours / (mileage + 1)
+    data["fault_density"] = faults / (hours + 1)
+    data["load_efficiency"] = load / (efficiency + 1)
+
     return data
+
+def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize raw UI or agent input into the schema expected by the model pipeline."""
+    normalized: Dict[str, Any] = {}
+
+    for feature in INPUT_NUMERIC_FEATURES:
+        normalized[feature] = float(input_data.get(feature, 0.0) or 0.0)
+
+    for feature in INPUT_CATEGORICAL_FEATURES:
+        options = CATEGORICAL_OPTIONS[feature]
+        value = input_data.get(feature, options[0])
+        normalized[feature] = value if value in options else options[0]
+
+    if "days_since_last_service" in input_data and input_data["days_since_last_service"] is not None:
+        normalized["days_since_last_service"] = max(0, int(float(input_data["days_since_last_service"])))
+    else:
+        normalized["last_service_date"] = input_data.get("last_service_date", date.today())
+
+    return calculate_internal_features(normalized)
+
+def prepare_model_input_frame(features: List[str], input_data: Dict[str, Any]) -> pd.DataFrame:
+    """Build a model-aligned DataFrame from raw inputs."""
+    full_data = normalize_input_data(input_data)
+    row: Dict[str, float] = {}
+
+    for feature in features:
+        if feature in CAT_ENCODINGS:
+            cat_feature, category_value = CAT_ENCODINGS[feature]
+            row[feature] = 1.0 if full_data.get(cat_feature) == category_value else 0.0
+        else:
+            row[feature] = float(full_data.get(feature, 0.0))
+
+    return pd.DataFrame([row], columns=features)
 
 def build_feature_vector(features: List[str], input_data: Dict[str, Any]) -> np.ndarray:
     """Transforms raw UI inputs into a model-ready 1x28 feature vector."""
-    full_data = calculate_internal_features(input_data)
-    
-    X = np.zeros((1, len(features)), dtype=float)
-    feature_to_idx = {f: i for i, f in enumerate(features)}
-
-    encoded_cols = set(CAT_ENCODINGS.keys())
-    
-    # Fill numeric/calculated features
-    for feature in features:
-        if feature not in encoded_cols:
-            X[0, feature_to_idx[feature]] = float(full_data.get(feature, 0.0))
-
-    # Fill one-hot encoded columns based on categorical selectbox choices
-    for encoded_col, (cat_feature, category_value) in CAT_ENCODINGS.items():
-        if encoded_col in feature_to_idx:
-            selected_value = full_data.get(cat_feature)
-            X[0, feature_to_idx[encoded_col]] = 1.0 if selected_value == category_value else 0.0
-
-    return X
+    frame = prepare_model_input_frame(features, input_data)
+    return frame.to_numpy(dtype=float)

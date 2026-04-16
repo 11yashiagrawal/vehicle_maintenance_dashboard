@@ -1,4 +1,6 @@
 from utils.langgraph_agent import build_agent
+import json
+
 
 agent = build_agent()
 
@@ -13,30 +15,20 @@ input_data = {
     "engine_load_percent": 90,
     "fuel_efficiency_kmpl": 8,
     "days_since_last_service": 200,
-    "vehicle_type": "Bus",
+    "vehicle_type": "SUV",
     "fuel_type": "Diesel",
     "region": "North",
-    "road_condition": "Rural",
-    "weather_condition": "Hot"
+    "road_condition": "Highway",
+    "weather_condition": "Hot",
 }
 
-result = agent.invoke({
-    "input_data": input_data
-})
+result = agent.invoke({"input_data": input_data})
 
-output = result["final_output"]
+assert "result" in result
+assert isinstance(result["result"], dict)
+assert "action_plan" in result["result"]
+assert result["result"]["action_plan"], "Graph should return a non-empty action plan"
 
-print("\n=== VEHICLE HEALTH REPORT ===\n")
-
-# Health Summary
-print("🔍 Health Summary")
-for key, value in output["Health Summary"].items():
-    print(f"{key}: {value}")
-
-print("\n Action Plan")
-
-for i, item in enumerate(output["Action Plan"], 1):
-    print(f"\n{i}. Issue:")
-    print(item["issue"])
-    print(f"   Priority: {item['priority']}")
-    print(f"   Timeline: {item['timeline']}")
+print("\n=== LANGGRAPH AGENT OUTPUT ===\n")
+print(json.dumps(result["result"], indent=2))
+print("test_langgraph.py passed")

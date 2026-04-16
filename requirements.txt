@@ -7,11 +7,13 @@ joblib
 
 # App
 streamlit
+altair
 
 # RAG + Agentic AI
 langchain
 langchain-community
 langchain-huggingface
+langchain-ollama
 langgraph
 faiss-cpu
 sentence-transformers

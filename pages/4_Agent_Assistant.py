@@ -1,65 +1,46 @@
 import streamlit as st
-from utils.model_loader import load_artifacts, load_sample_data
-from utils.preprocessor import build_input_form_grid
+
 from utils.langgraph_agent import build_agent
+from utils.model_loader import load_artifacts
+from utils.preprocessor import build_input_form_grid
 from utils.ui_utils import apply_full_page_background, inject_custom_css
 
-st.set_page_config(page_title="Vehicle Maintenance Predictor", page_icon="🚗", layout="wide")
+
+st.set_page_config(page_title="Maintenance Agent", page_icon="🤖", layout="wide")
 
 apply_full_page_background()
 
 inject_custom_css("""
 div.stButton > button[kind="primary"] {
     background-color: #00ffff !important;
-    padding: 1.2rem 3rem !important;
-    font-size: 1.4rem !important;
+    padding: 1.1rem 2.6rem !important;
+    font-size: 1.2rem !important;
     border: none !important;
     border-radius: 12px !important;
     transition: all 0.3s ease !important;
-    text-transform: uppercase !important;
-    letter-spacing: 2px !important;
+    letter-spacing: 1px !important;
     width: 100% !important;
-    height: auto !important;
-    min-height: 4rem !important;
+    min-height: 3.8rem !important;
 }
 
-/* Force black text for any internal elements (spans, p, etc.) */
 div.stButton > button[kind="primary"] * {
     color: #000000 !important;
     font-weight: 800 !important;
 }
 
-div.stButton > button[kind="primary"]:hover {
-    box-shadow: 0 0 5px rgba(0, 255, 255, 0.8) !important;
-    transform: translateY(-1px) !important;
-}
-
-div.stButton > button[kind="primary"]:hover * {
-    color: #000000 !important;
-    font-weight: 800 !important;
-}
-
-div.stButton > button[kind="primary"]:active {
-    transform: scale(0.98) !important;
-}
-
-.report-card {
-    background: rgba(8, 18, 24, 0.82);
-    border: 1px solid rgba(0, 255, 255, 0.18);
-    border-radius: 16px;
+.agent-card {
+    background: rgba(8, 18, 24, 0.84);
+    border: 1px solid rgba(0, 255, 255, 0.20);
+    border-radius: 18px;
     padding: 1rem 1.1rem;
     margin-bottom: 1rem;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.20);
 }
 
-.report-card h3, .report-card h4 {
-    margin-top: 0;
-}
-
-.issue-chip {
+.agent-chip {
     display: inline-block;
-    margin: 0.2rem 0.35rem 0.2rem 0;
-    padding: 0.35rem 0.7rem;
+    margin: 0.25rem 0.35rem 0.25rem 0;
+    padding: 0.35rem 0.75rem;
     border-radius: 999px;
     background: rgba(0, 255, 255, 0.12);
     border: 1px solid rgba(0, 255, 255, 0.35);
@@ -76,21 +57,21 @@ def load_agent():
 
 def render_issue_chips(issues: list[str]) -> None:
     chips = "".join(
-        f"<span class='issue-chip'>{issue.replace('_', ' ').title()}</span>"
+        f"<span class='agent-chip'>{issue.replace('_', ' ').title()}</span>"
         for issue in issues
     )
     st.markdown(chips, unsafe_allow_html=True)
 
 
 def render_action_plan(action_plan: list[dict]) -> None:
-    st.subheader("🛠 Action Plan")
-    for index, item in enumerate(action_plan, start=1):
+    st.subheader("🛠 Agent Recommendations")
+    for idx, item in enumerate(action_plan, start=1):
         st.markdown(
             f"""
-            <div class="report-card">
-                <h4>{index}. {item.get("issue", "Recommended Action")}</h4>
-                <p><strong>Why it matters:</strong> {item.get("reason", "No reason provided.")}</p>
-                <p><strong>Context impact:</strong> {item.get("context_impact", "No contextual impact provided.")}</p>
+            <div class="agent-card">
+                <h4>{idx}. {item.get("issue", "Recommended Action")}</h4>
+                <p><strong>Reason:</strong> {item.get("reason", "No reason provided.")}</p>
+                <p><strong>Context impact:</strong> {item.get("context_impact", "No context provided.")}</p>
                 <p><strong>Recommended action:</strong> {item.get("action", "No action provided.")}</p>
                 <p><strong>Priority:</strong> {item.get("priority", "Unknown")} | <strong>Timeline:</strong> {item.get("timeline", "Not specified")}</p>
             </div>
@@ -105,20 +86,21 @@ def render_report(report: dict) -> None:
     risk_level = str(report.get("risk_level", "UNKNOWN"))
     key_issues = report.get("key_issues", [])
 
+    st.markdown("### 🚦 Agent Summary")
     col1, col2, col3 = st.columns([1.2, 1, 1])
     with col1:
         if risk_prediction == 1 or risk_level.upper() == "HIGH":
-            st.error("🔴 **Maintenance Required**")
+            st.error("🔴 **Immediate maintenance attention required**")
         elif risk_level.upper() == "MEDIUM":
-            st.warning("🟠 **Maintenance Attention Needed**")
+            st.warning("🟠 **Maintenance attention recommended**")
         else:
-            st.success("🟢 **No Immediate Maintenance Needed**")
+            st.success("🟢 **Vehicle appears stable for now**")
     with col2:
         st.metric("Risk", f"{risk_score:.1%}")
     with col3:
         st.metric("Risk Level", risk_level.title())
 
-    st.subheader("🔍 Key Issues")
+    st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
 
     render_action_plan(report.get("action_plan", []))
@@ -132,39 +114,40 @@ def render_report(report: dict) -> None:
                 if idx != len(contexts):
                     st.markdown("---")
         else:
-            st.info("No maintenance guidance was retrieved for this case.")
+            st.info("No maintenance guidance was retrieved.")
 
     with st.expander("🧾 Raw Agent Output"):
         st.json(report)
 
+
 st.markdown("""
-<h1 style='font-size: 80px; text-shadow: 0 0 10px rgba(0,255,255,0.5);'>🔮 Live Maintenance Prediction</h1>
+<h1 style='font-size: 74px; text-shadow: 0 0 10px rgba(0,255,255,0.5);'>🤖 Vehicle Maintenance Agent</h1>
 """, unsafe_allow_html=True)
-st.caption("Use the controls below to estimate maintenance risk based on live vehicle diagnostics.")
+st.caption("Use this assistant to generate a full diagnostics report with issues, maintenance guidance, and next-step recommendations.")
+
+with st.container():
+    st.markdown(
+        """
+        <div class="agent-card">
+            <h3>What this page does</h3>
+            <p>This assistant combines your trained maintenance model, rule-based diagnostics, document retrieval, and optional Ollama enrichment to create a practical service report.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 _, _, features = load_artifacts()
 agent = load_agent()
 
-predict_clicked = st.button("🔍 Click to Predict Maintenance", type="primary")
-result_container = st.container()
-
 st.markdown("---")
-
 input_data = build_input_form_grid(features, num_cols=2, use_sidebar=False)
 
-if predict_clicked:
-    with st.spinner("Running prediction..."):
+run_agent = st.button("🤖 Run Maintenance Agent", type="primary")
+
+if run_agent:
+    with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
         agent_state = agent.invoke({"input_data": input_data})
         report = agent_state["result"]
 
-    with result_container:
-        render_report(report)
-
-st.markdown("---")
-
-with st.expander("📋 Sample data used during development"):
-    df_sample = load_sample_data()
-    if df_sample is not None:
-        st.dataframe(df_sample.head())
-    else:
-        st.info("Add `data/sample_data.csv` to view a sample of the training data.")
+    st.markdown("---")
+    render_report(report)

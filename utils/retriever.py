@@ -1,58 +1,58 @@
 import os
-from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import FakeEmbeddings
-from langchain_text_splitters import CharacterTextSplitter
+from functools import lru_cache
+from typing import List
+
+from langchain_core.documents import Document
 
 
+class KeywordRetriever:
+    def __init__(self, sections: List[str], k: int = 3):
+        self.sections = sections
+        self.k = k
+
+    def invoke(self, query: str) -> List[Document]:
+        terms = [term.lower() for term in query.split() if term.strip()]
+        scored_sections = []
+
+        for section in self.sections:
+            section_lower = section.lower()
+            score = sum(section_lower.count(term) for term in terms)
+            scored_sections.append((score, section))
+
+        ranked = sorted(scored_sections, key=lambda item: item[0], reverse=True)
+        top_sections = [section for score, section in ranked[: self.k] if score > 0]
+
+        if not top_sections:
+            top_sections = self.sections[: self.k]
+
+        return [Document(page_content=section) for section in top_sections]
+
+
+@lru_cache(maxsize=1)
 def load_retriever():
-    # File path
     file_path = os.path.join(
         os.path.dirname(__file__),
         "..",
         "data",
-        "maintenance_docs.txt"
+        "maintenance_docs.txt",
     )
 
-    # Read file
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    print("TEXT LENGTH:", len(text))
+    sections = [section.strip() for section in text.split("---") if section.strip()]
 
-    if len(text.strip()) == 0:
-        raise ValueError("File is empty")
+    use_vector_retriever = os.getenv("USE_VECTOR_RETRIEVER", "0") == "1"
 
-    # 🔥 STEP 1: Split into logical sections
-    sections = text.split("---")
-    sections = [s.strip() for s in sections if s.strip()]
+    if use_vector_retriever:
+        from langchain_community.vectorstores import FAISS
+        from langchain_huggingface import HuggingFaceEmbeddings
 
-    print("SECTIONS:", len(sections))
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={"local_files_only": True},
+        )
+        vectorstore = FAISS.from_texts(sections, embeddings)
+        return vectorstore.as_retriever(search_kwargs={"k": 3})
 
-    # 🔥 STEP 2: Chunking
-    splitter = CharacterTextSplitter(
-        chunk_size=200,
-        chunk_overlap=50
-    )
-
-    chunks = []
-    for section in sections:
-        chunks.extend(splitter.split_text(section))
-
-    print("FINAL CHUNKS:", len(chunks))
-
-    if len(chunks) == 0:
-        raise ValueError("No valid chunks created")
-
-    # 🔥 STEP 3: FAST EMBEDDINGS (NO FREEZE)
-    embeddings = FakeEmbeddings(size=384)
-
-    print("CREATING VECTORSTORE...")
-    vectorstore = FAISS.from_texts(chunks, embeddings)
-    print("VECTORSTORE CREATED")
-
-    # 🔥 STEP 4: Retriever
-    retriever = vectorstore.as_retriever(
-        search_kwargs={"k": 3}
-    )
-
-    return retriever
+    return KeywordRetriever(sections, k=3)

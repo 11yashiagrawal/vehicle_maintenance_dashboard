@@ -11,17 +11,23 @@ FEATURES_FILENAME = "features.csv"
 SAMPLE_DATA_FILENAME = "sample_data.csv"
 FULL_DATA_FILENAME = "Fleet_vehicle.csv"
 STYLE_CSS_FILENAME = "style.css"
+DEFAULT_OLLAMA_MODEL = "llama3.2:3b"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
 CATEGORICAL_OPTIONS = {
-    "vehicle_type": ["Bus", "Car", "Truck", "Van"],
-    "fuel_type": ["Electric", "Petrol", "Diesel"],
+    "vehicle_type": ["SUV", "Sedan", "Truck", "Van"],
+    "fuel_type": ["Diesel", "Electric", "Petrol"],
     "region": ["North", "South", "West", "East"],
-    "road_condition": ["Rural", "Urban"],
-    "weather_condition": ["Hot", "Normal", "Rainy"],
+    "road_condition": ["Highway", "Rural", "Urban"],
+    "weather_condition": ["Cold", "Hot", "Normal", "Rainy"],
 }
 
 # CAT_ENCODINGS maps the one-hot encoded model columns back to (Original Feature, Category Value)
 # This allows us to dynamically build the feature vector from selectbox choices.
+# Any category not listed here is treated as the baseline category and is encoded as all zeros
+# for that feature group. For the current model those baselines are:
+# vehicle_type=SUV, fuel_type=Diesel, region=East, road_condition=Highway,
+# weather_condition=Cold.
 CAT_ENCODINGS = {
     "vehicle_type_Sedan": ("vehicle_type", "Sedan"),
     "vehicle_type_Truck": ("vehicle_type", "Truck"),
@@ -37,6 +43,20 @@ CAT_ENCODINGS = {
     "weather_condition_Normal": ("weather_condition", "Normal"),
     "weather_condition_Rainy": ("weather_condition", "Rainy"),
 }
+
+INPUT_NUMERIC_FEATURES = [
+    "mileage_km",
+    "engine_hours",
+    "vehicle_age_years",
+    "fault_code_count",
+    "oil_temp_avg_celsius",
+    "vibration_level",
+    "battery_voltage",
+    "engine_load_percent",
+    "fuel_efficiency_kmpl",
+]
+
+INPUT_CATEGORICAL_FEATURES = list(CATEGORICAL_OPTIONS.keys())
 
 NUMERIC_FEATURE_META = {
     "mileage_km": {
