@@ -5,11 +5,13 @@ from langgraph.graph import StateGraph
 from utils.agent_logic import (
     build_action_plan,
     build_fleet_policy_checks,
+    build_query_response,
     build_retrieval_query,
     build_service_outlook,
     extract_vehicle_signals,
     extract_user_query,
     maybe_enrich_with_llm,
+    prioritize_action_plan,
     retrieve_maintenance_context,
     validate_vehicle_input,
 )
@@ -48,6 +50,7 @@ def report_node(state: AgentState):
     prediction = state["prediction"]
     normalized_input = state["normalized_input"]
     action_plan = build_action_plan(normalized_input, state["signals"], state["contexts"])
+    action_plan = prioritize_action_plan(action_plan, state.get("maintenance_query", ""))
     service_outlook = build_service_outlook(
         normalized_input,
         state["signals"],
@@ -57,6 +60,13 @@ def report_node(state: AgentState):
         normalized_input,
         state["signals"],
         prediction["risk_probability"],
+    )
+    query_response = build_query_response(
+        state.get("maintenance_query", ""),
+        action_plan,
+        prediction["risk_label"],
+        prediction["risk_probability"],
+        state["contexts"],
     )
 
     base_report = {
@@ -77,6 +87,7 @@ def report_node(state: AgentState):
         "retrieval_query": build_retrieval_query(state["signals"], state.get("maintenance_query", "")),
         "retrieved_context": state["contexts"],
         "sources": state["contexts"],
+        "query_response": query_response,
         "service_outlook": service_outlook,
         "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,

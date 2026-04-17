@@ -95,6 +95,18 @@ div.stButton > button[kind="primary"] * {
     padding: 0.95rem 1rem;
     margin-top: 1.1rem;
 }
+
+.answer-card {
+    background: rgba(8, 25, 32, 0.88);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    border-radius: 18px;
+    padding: 1rem 1.1rem;
+    margin: 1rem 0 1.2rem;
+}
+
+.answer-card h3 {
+    margin-top: 0;
+}
 """)
 
 
@@ -128,6 +140,8 @@ def render_action_plan(action_plan: list[dict]) -> None:
 
 
 def render_policy_checks(policy_checks: list[dict]) -> None:
+    if not policy_checks:
+        return
     st.subheader("🏢 Fleet Policy Checks")
     for item in policy_checks:
         st.markdown(
@@ -142,6 +156,36 @@ def render_policy_checks(policy_checks: list[dict]) -> None:
         )
 
 
+def render_query_response(query_response: dict) -> None:
+    if not query_response:
+        return
+
+    st.subheader("💬 Answer To Your Query")
+    st.markdown(
+        f"""
+        <div class="answer-card">
+            <h3>{query_response.get("short_answer", "No answer generated.")}</h3>
+            <p><strong>Recommended focus:</strong> {query_response.get("recommended_focus", "General inspection")}</p>
+            <p><strong>Risk context:</strong> {query_response.get("risk_context", "Unknown")}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    steps = query_response.get("immediate_steps", [])
+    if steps:
+        st.markdown("#### Recommended Next Steps")
+        for idx, step in enumerate(steps, start=1):
+            st.markdown(
+                f"{idx}. {step.get('step', 'Inspect the vehicle.')} "
+                f"(`{step.get('priority', 'Unknown')}`, `{step.get('timeline', 'Not specified')}`)"
+            )
+
+    evidence = query_response.get("evidence_used", [])
+    if evidence:
+        st.caption("Guided by: " + " | ".join(evidence))
+
+
 def render_report(report: dict) -> None:
     health_summary = report.get("health_summary", {})
     risk_prediction = report.get("risk_prediction", 0)
@@ -149,6 +193,7 @@ def render_report(report: dict) -> None:
     risk_level = str(health_summary.get("risk_level", report.get("risk_level", "UNKNOWN")))
     key_issues = health_summary.get("key_issues", report.get("key_issues", []))
     maintenance_query = report.get("maintenance_query", "")
+    query_response = report.get("query_response", {})
     policy_checks = report.get("fleet_policy_checks", [])
 
     st.markdown("### 🚦 Agent Summary")
@@ -168,6 +213,7 @@ def render_report(report: dict) -> None:
     if maintenance_query:
         st.markdown("### 💬 Maintenance Query")
         st.info(maintenance_query)
+        render_query_response(query_response)
 
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)

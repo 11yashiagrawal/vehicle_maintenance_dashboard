@@ -150,6 +150,27 @@ def build_action_plan(input_data: Dict, signals: List[Dict[str, str]], contexts:
     return action_plan
 
 
+def prioritize_action_plan(action_plan: List[Dict[str, str]], maintenance_query: str) -> List[Dict[str, str]]:
+    query = maintenance_query.lower().strip()
+    if not query:
+        return action_plan
+
+    ranked: List[tuple[int, Dict[str, str]]] = []
+    for item in action_plan:
+        searchable = " ".join(
+            [
+                item.get("issue", ""),
+                item.get("reason", ""),
+                item.get("action", ""),
+            ]
+        ).lower()
+        score = sum(term in searchable for term in query.split())
+        ranked.append((score, item))
+
+    ranked.sort(key=lambda row: row[0], reverse=True)
+    return [item for _, item in ranked]
+
+
 def build_service_outlook(input_data: Dict, signals: List[Dict[str, str]], risk_score: float) -> Dict[str, str]:
     if risk_score >= 0.8:
         inspection_window = "Immediate workshop intake"
@@ -240,14 +261,58 @@ def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], r
             ),
         })
 
-    if not checks:
-        checks.append({
-            "title": "Fleet Policy Status",
-            "status": "Clear",
-            "detail": "No immediate policy or lifecycle triggers were raised from the current vehicle profile.",
-        })
-
     return checks
+
+
+def build_query_response(
+    maintenance_query: str,
+    action_plan: List[Dict[str, str]],
+    risk_label: str,
+    risk_score: float,
+    contexts: List[str],
+) -> Dict:
+    if not maintenance_query.strip():
+        return {}
+
+    prioritized_plan = prioritize_action_plan(action_plan, maintenance_query)
+    top_actions = prioritized_plan[:3]
+    first_action = top_actions[0] if top_actions else {}
+
+    if risk_label == "HIGH":
+        short_answer = (
+            "Yes, this case should be treated as urgent. Move the vehicle toward inspection and address the highest-risk subsystem first."
+        )
+    elif risk_label == "MEDIUM":
+        short_answer = (
+            "This does not look critical yet, but it should be inspected soon before the issue becomes operationally expensive."
+        )
+    else:
+        short_answer = (
+            "The current risk is low, so continue service with targeted checks and normal monitoring."
+        )
+
+    immediate_steps = [
+        {
+            "step": item.get("action", "Inspect the vehicle."),
+            "priority": item.get("priority", "Unknown"),
+            "timeline": item.get("timeline", "Not specified"),
+        }
+        for item in top_actions
+    ]
+
+    evidence = []
+    for context in contexts[:2]:
+        first_line = context.splitlines()[0].strip()
+        evidence.append(first_line if first_line else "Maintenance guidance")
+
+    return {
+        "question": maintenance_query,
+        "short_answer": short_answer,
+        "recommended_focus": first_action.get("issue", "General inspection"),
+        "immediate_steps": immediate_steps,
+        "evidence_used": evidence,
+        "risk_context": f"{risk_label.title()} risk ({risk_score:.1%})",
+    }
 
 
 def merge_report(base_report: Dict, enriched: Dict) -> Dict:
@@ -314,8 +379,16 @@ def analyze_vehicle(input_data: Dict) -> Dict:
     signals = extract_vehicle_signals(normalized_input, risk_score)
     contexts = retrieve_maintenance_context(signals, maintenance_query)
     action_plan = build_action_plan(normalized_input, signals, contexts)
+    action_plan = prioritize_action_plan(action_plan, maintenance_query)
     service_outlook = build_service_outlook(normalized_input, signals, risk_score)
     fleet_policy_checks = build_fleet_policy_checks(normalized_input, signals, risk_score)
+    query_response = build_query_response(
+        maintenance_query,
+        action_plan,
+        risk_label,
+        risk_score,
+        contexts,
+    )
 
     report = {
         "health_summary": {
@@ -334,6 +407,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "retrieval_mode": get_retriever_mode(),
         "retrieved_context": contexts,
         "sources": contexts,
+        "query_response": query_response,
         "service_outlook": service_outlook,
         "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,
