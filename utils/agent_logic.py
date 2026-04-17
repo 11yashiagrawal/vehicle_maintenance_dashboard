@@ -5,11 +5,15 @@ from typing import Dict, List
 from utils.config import DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL
 from utils.model_tool import predict_risk
 from utils.preprocessor import normalize_input_data
-from utils.retriever import load_retriever
+from utils.retriever import get_retriever_mode, load_retriever
 
 
 def validate_vehicle_input(input_data: Dict) -> Dict:
     return normalize_input_data(input_data)
+
+
+def extract_user_query(input_data: Dict) -> str:
+    return str(input_data.get("maintenance_query", "") or "").strip()
 
 
 def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[str, str]]:
@@ -81,8 +85,19 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[st
     return signals
 
 
-def retrieve_maintenance_context(signals: List[Dict[str, str]]) -> List[str]:
-    query = " ".join(signal["query"] for signal in signals) or "preventive maintenance vehicle diagnostics"
+def build_retrieval_query(signals: List[Dict[str, str]], maintenance_query: str) -> str:
+    signal_query = " ".join(signal["query"] for signal in signals).strip()
+    if maintenance_query and signal_query:
+        return f"{maintenance_query} {signal_query}"
+    if maintenance_query:
+        return maintenance_query
+    if signal_query:
+        return signal_query
+    return "preventive maintenance vehicle diagnostics"
+
+
+def retrieve_maintenance_context(signals: List[Dict[str, str]], maintenance_query: str = "") -> List[str]:
+    query = build_retrieval_query(signals, maintenance_query)
     retriever = load_retriever()
     docs = retriever.invoke(query)
     return [doc.page_content for doc in docs]
@@ -179,21 +194,37 @@ BASE_REPORT:
 
 def analyze_vehicle(input_data: Dict) -> Dict:
     normalized_input = validate_vehicle_input(input_data)
+    maintenance_query = extract_user_query(input_data)
     prediction = predict_risk(normalized_input)
     risk_score = prediction["risk_probability"]
     risk_label = prediction["risk_label"]
 
     signals = extract_vehicle_signals(normalized_input, risk_score)
-    contexts = retrieve_maintenance_context(signals)
+    contexts = retrieve_maintenance_context(signals, maintenance_query)
     action_plan = build_action_plan(normalized_input, signals, contexts)
 
     report = {
+        "health_summary": {
+            "vehicle_status": (
+                "Maintenance Required" if prediction["risk_prediction"] == 1 else "No Immediate Maintenance Needed"
+            ),
+            "risk_level": risk_label,
+            "risk_score": round(risk_score, 4),
+            "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
+        },
         "risk_level": risk_label,
         "risk_score": round(risk_score, 4),
         "risk_prediction": prediction["risk_prediction"],
         "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
+        "maintenance_query": maintenance_query,
+        "retrieval_mode": get_retriever_mode(),
         "retrieved_context": contexts,
+        "sources": contexts,
         "action_plan": action_plan,
+        "disclaimer": (
+            "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "
+            "when necessary and consult a certified technician or fleet supervisor before further use."
+        ),
     }
 
     return maybe_enrich_with_llm(report, normalized_input, contexts)

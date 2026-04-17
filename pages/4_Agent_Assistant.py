@@ -81,10 +81,13 @@ def render_action_plan(action_plan: list[dict]) -> None:
 
 
 def render_report(report: dict) -> None:
+    health_summary = report.get("health_summary", {})
     risk_prediction = report.get("risk_prediction", 0)
-    risk_score = float(report.get("risk_score", 0.0))
-    risk_level = str(report.get("risk_level", "UNKNOWN"))
-    key_issues = report.get("key_issues", [])
+    risk_score = float(health_summary.get("risk_score", report.get("risk_score", 0.0)))
+    risk_level = str(health_summary.get("risk_level", report.get("risk_level", "UNKNOWN")))
+    key_issues = health_summary.get("key_issues", report.get("key_issues", []))
+    maintenance_query = report.get("maintenance_query", "")
+    retrieval_mode = report.get("retrieval_mode", "UNKNOWN")
 
     st.markdown("### 🚦 Agent Summary")
     col1, col2, col3 = st.columns([1.2, 1, 1])
@@ -100,21 +103,36 @@ def render_report(report: dict) -> None:
     with col3:
         st.metric("Risk Level", risk_level.title())
 
+    status_cols = st.columns(2)
+    with status_cols[0]:
+        st.metric("Retrieval Mode", retrieval_mode)
+    with status_cols[1]:
+        st.metric("Sources Used", len(report.get("sources", [])))
+
+    if maintenance_query:
+        st.markdown("### 💬 Maintenance Query")
+        st.info(maintenance_query)
+
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
 
     render_action_plan(report.get("action_plan", []))
 
-    with st.expander("📚 Retrieved Maintenance Guidance"):
-        contexts = report.get("retrieved_context", [])
-        if contexts:
-            for idx, context in enumerate(contexts, start=1):
-                st.markdown(f"**Guidance {idx}**")
-                st.write(context)
-                if idx != len(contexts):
+    with st.expander("📚 Sources & Maintenance Guidance", expanded=True):
+        sources = report.get("sources", report.get("retrieved_context", []))
+        if sources:
+            for idx, source in enumerate(sources, start=1):
+                st.markdown(f"**Source {idx}**")
+                st.write(source)
+                if idx != len(sources):
                     st.markdown("---")
         else:
-            st.info("No maintenance guidance was retrieved.")
+            st.info("No maintenance sources were retrieved.")
+
+    st.warning(report.get(
+        "disclaimer",
+        "This assistant provides decision support only. Confirm safety-critical actions with a certified technician."
+    ))
 
     with st.expander("🧾 Raw Agent Output"):
         st.json(report)
@@ -140,12 +158,18 @@ _, _, features = load_artifacts()
 agent = load_agent()
 
 st.markdown("---")
+maintenance_query = st.text_area(
+    "Maintenance Query (Optional)",
+    placeholder="Example: This SUV has overheating, vibration, and overdue service. What should be inspected first?",
+    help="Ask a maintenance question to guide the agent's retrieval and recommendations.",
+)
 input_data = build_input_form_grid(features, num_cols=2, use_sidebar=False)
 
 run_agent = st.button("🤖 Run Maintenance Agent", type="primary")
 
 if run_agent:
     with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
+        input_data["maintenance_query"] = maintenance_query
         agent_state = agent.invoke({"input_data": input_data})
         report = agent_state["result"]
 

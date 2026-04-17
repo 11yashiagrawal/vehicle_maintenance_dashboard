@@ -56,3 +56,7 @@ def load_retriever():
         return vectorstore.as_retriever(search_kwargs={"k": 3})
 
     return KeywordRetriever(sections, k=3)
+
+
+def get_retriever_mode() -> str:
+    return "FAISS" if os.getenv("USE_VECTOR_RETRIEVER", "0") == "1" else "KEYWORD"

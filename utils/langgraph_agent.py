@@ -4,17 +4,21 @@ from langgraph.graph import StateGraph
 
 from utils.agent_logic import (
     build_action_plan,
+    build_retrieval_query,
     extract_vehicle_signals,
+    extract_user_query,
     maybe_enrich_with_llm,
     retrieve_maintenance_context,
     validate_vehicle_input,
 )
 from utils.model_tool import predict_risk
+from utils.retriever import get_retriever_mode
 
 
 class AgentState(TypedDict, total=False):
     input_data: Dict
     normalized_input: Dict
+    maintenance_query: str
     prediction: Dict
     signals: List[Dict[str, str]]
     contexts: List[str]
@@ -23,7 +27,8 @@ class AgentState(TypedDict, total=False):
 
 def validate_node(state: AgentState):
     normalized_input = validate_vehicle_input(state["input_data"])
-    return {"normalized_input": normalized_input}
+    maintenance_query = extract_user_query(state["input_data"])
+    return {"normalized_input": normalized_input, "maintenance_query": maintenance_query}
 
 
 def score_node(state: AgentState):
@@ -33,7 +38,7 @@ def score_node(state: AgentState):
 
 
 def retrieve_node(state: AgentState):
-    contexts = retrieve_maintenance_context(state["signals"])
+    contexts = retrieve_maintenance_context(state["signals"], state.get("maintenance_query", ""))
     return {"contexts": contexts}
 
 
@@ -43,12 +48,28 @@ def report_node(state: AgentState):
     action_plan = build_action_plan(normalized_input, state["signals"], state["contexts"])
 
     base_report = {
+        "health_summary": {
+            "vehicle_status": (
+                "Maintenance Required" if prediction["risk_prediction"] == 1 else "No Immediate Maintenance Needed"
+            ),
+            "risk_level": prediction["risk_label"],
+            "risk_score": round(prediction["risk_probability"], 4),
+            "key_issues": [signal["issue"] for signal in state["signals"]] or ["no immediate critical issue"],
+        },
         "risk_level": prediction["risk_label"],
         "risk_score": round(prediction["risk_probability"], 4),
         "risk_prediction": prediction["risk_prediction"],
         "key_issues": [signal["issue"] for signal in state["signals"]] or ["no immediate critical issue"],
+        "maintenance_query": state.get("maintenance_query", ""),
+        "retrieval_mode": get_retriever_mode(),
+        "retrieval_query": build_retrieval_query(state["signals"], state.get("maintenance_query", "")),
         "retrieved_context": state["contexts"],
+        "sources": state["contexts"],
         "action_plan": action_plan,
+        "disclaimer": (
+            "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "
+            "when necessary and consult a certified technician or fleet supervisor before further use."
+        ),
     }
     result = maybe_enrich_with_llm(base_report, normalized_input, state["contexts"])
     return {"result": result}
