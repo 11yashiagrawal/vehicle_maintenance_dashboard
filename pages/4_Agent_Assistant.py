@@ -185,6 +185,15 @@ def render_query_response(query_response: dict) -> None:
     if evidence:
         st.caption("Guided by: " + " | ".join(evidence))
 
+    parsed_facts = query_response.get("parsed_facts", {})
+    if parsed_facts:
+        st.markdown("#### Parsed From Query")
+        pretty_facts = []
+        for key, value in parsed_facts.items():
+            label = key.replace("_", " ").title()
+            pretty_facts.append(f"**{label}:** {value}")
+        st.markdown(" | ".join(pretty_facts))
+
 
 def render_report(report: dict) -> None:
     health_summary = report.get("health_summary", {})
@@ -194,6 +203,7 @@ def render_report(report: dict) -> None:
     key_issues = health_summary.get("key_issues", report.get("key_issues", []))
     maintenance_query = report.get("maintenance_query", "")
     query_response = report.get("query_response", {})
+    parsed_query_facts = report.get("parsed_query_facts", {})
     policy_checks = report.get("fleet_policy_checks", [])
 
     st.markdown("### 🚦 Agent Summary")
@@ -214,6 +224,8 @@ def render_report(report: dict) -> None:
         st.markdown("### 💬 Maintenance Query")
         st.info(maintenance_query)
         render_query_response(query_response)
+    elif parsed_query_facts:
+        st.caption("Parsed query facts were applied to this report.")
 
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)

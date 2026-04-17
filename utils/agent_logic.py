@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Dict, List
 
 from utils.config import DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL
@@ -14,6 +15,51 @@ def validate_vehicle_input(input_data: Dict) -> Dict:
 
 def extract_user_query(input_data: Dict) -> str:
     return str(input_data.get("maintenance_query", "") or "").strip()
+
+
+def parse_query_facts(maintenance_query: str) -> Dict:
+    query = maintenance_query.lower().strip()
+    if not query:
+        return {}
+
+    parsed: Dict[str, object] = {}
+
+    age_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:year|years|yr|yrs)\b", query)
+    if age_match:
+        parsed["vehicle_age_years"] = float(age_match.group(1))
+
+    vehicle_patterns = {
+        "truck": "Truck",
+        "van": "Van",
+        "suv": "SUV",
+        "sedan": "Sedan",
+    }
+    for token, label in vehicle_patterns.items():
+        if token in query:
+            parsed["vehicle_type"] = label
+            break
+
+    if "overheat" in query or "hot engine" in query:
+        parsed["oil_temp_avg_celsius"] = max(float(parsed.get("oil_temp_avg_celsius", 0.0)), 115.0)
+    if "vibration" in query or "vibrating" in query or "shake" in query:
+        parsed["vibration_level"] = max(float(parsed.get("vibration_level", 0.0)), 8.0)
+    if "battery" in query or "not starting" in query or "won't start" in query or "wont start" in query:
+        parsed["battery_voltage"] = min(float(parsed.get("battery_voltage", 15.0)), 11.2)
+    if "fault" in query or "error code" in query or "warning code" in query:
+        parsed["fault_code_count"] = max(float(parsed.get("fault_code_count", 0.0)), 6.0)
+    if "overdue service" in query or "not serviced" in query or "service overdue" in query:
+        parsed["days_since_last_service"] = max(float(parsed.get("days_since_last_service", 0.0)), 190.0)
+    if "not working" in query or "breakdown" in query:
+        parsed["fault_code_count"] = max(float(parsed.get("fault_code_count", 0.0)), 8.0)
+
+    return parsed
+
+
+def merge_query_into_input(input_data: Dict, parsed_query_facts: Dict) -> Dict:
+    merged = dict(input_data)
+    for key, value in parsed_query_facts.items():
+        merged[key] = value
+    return merged
 
 
 def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[str, str]]:
@@ -270,6 +316,7 @@ def build_query_response(
     risk_label: str,
     risk_score: float,
     contexts: List[str],
+    parsed_query_facts: Dict,
 ) -> Dict:
     if not maintenance_query.strip():
         return {}
@@ -312,6 +359,7 @@ def build_query_response(
         "immediate_steps": immediate_steps,
         "evidence_used": evidence,
         "risk_context": f"{risk_label.title()} risk ({risk_score:.1%})",
+        "parsed_facts": parsed_query_facts,
     }
 
 
@@ -370,8 +418,10 @@ BASE_REPORT:
 
 
 def analyze_vehicle(input_data: Dict) -> Dict:
-    normalized_input = validate_vehicle_input(input_data)
     maintenance_query = extract_user_query(input_data)
+    parsed_query_facts = parse_query_facts(maintenance_query)
+    merged_input = merge_query_into_input(input_data, parsed_query_facts)
+    normalized_input = validate_vehicle_input(merged_input)
     prediction = predict_risk(normalized_input)
     risk_score = prediction["risk_probability"]
     risk_label = prediction["risk_label"]
@@ -388,6 +438,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         risk_label,
         risk_score,
         contexts,
+        parsed_query_facts,
     )
 
     report = {
@@ -404,6 +455,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "risk_prediction": prediction["risk_prediction"],
         "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
         "maintenance_query": maintenance_query,
+        "parsed_query_facts": parsed_query_facts,
         "retrieval_mode": get_retriever_mode(),
         "retrieved_context": contexts,
         "sources": contexts,
