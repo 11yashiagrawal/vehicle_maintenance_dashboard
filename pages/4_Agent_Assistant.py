@@ -119,37 +119,12 @@ def render_action_plan(action_plan: list[dict]) -> None:
             <div class="agent-card">
                 <h4>{idx}. {item.get("issue", "Recommended Action")}</h4>
                 <p><strong>Reason:</strong> {item.get("reason", "No reason provided.")}</p>
-                <p><strong>Context impact:</strong> {item.get("context_impact", "No context provided.")}</p>
                 <p><strong>Recommended action:</strong> {item.get("action", "No action provided.")}</p>
                 <p><strong>Priority:</strong> {item.get("priority", "Unknown")} | <strong>Timeline:</strong> {item.get("timeline", "Not specified")}</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-
-def render_service_outlook(service_outlook: dict) -> None:
-    st.subheader("📅 Service Planning Outlook")
-    st.markdown(
-        f"""
-        <div class="insight-grid">
-            <div class="insight-card">
-                <div class="insight-label">Inspection Window</div>
-                <div class="insight-value">{service_outlook.get("inspection_window", "Not set")}</div>
-            </div>
-            <div class="insight-card">
-                <div class="insight-label">Downtime Risk</div>
-                <div class="insight-value">{service_outlook.get("downtime_risk", "Unknown")}</div>
-            </div>
-            <div class="insight-card">
-                <div class="insight-label">Primary Workshop Focus</div>
-                <div class="insight-value">{service_outlook.get("primary_focus", "Routine inspection")}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.info(service_outlook.get("operating_advice", "No operating advice available."))
 
 
 def render_policy_checks(policy_checks: list[dict]) -> None:
@@ -174,7 +149,6 @@ def render_report(report: dict) -> None:
     risk_level = str(health_summary.get("risk_level", report.get("risk_level", "UNKNOWN")))
     key_issues = health_summary.get("key_issues", report.get("key_issues", []))
     maintenance_query = report.get("maintenance_query", "")
-    service_outlook = report.get("service_outlook", {})
     policy_checks = report.get("fleet_policy_checks", [])
 
     st.markdown("### 🚦 Agent Summary")
@@ -198,7 +172,6 @@ def render_report(report: dict) -> None:
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
 
-    render_service_outlook(service_outlook)
     render_policy_checks(policy_checks)
     render_action_plan(report.get("action_plan", []))
 
