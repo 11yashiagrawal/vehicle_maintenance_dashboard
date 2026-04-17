@@ -84,8 +84,4 @@ with st.expander("📋 Sample data used during development"):
     if df_sample is not None:
         st.dataframe(df_sample.head())
     else:
-<<<<<<< HEAD
         st.info("Add data/sample_data.csv to view a sample of the training data.")
-=======
-        st.info("Add data/sample_data.csv to view a sample of the training data.")
->>>>>>> b96c02c (improve agent report and simplify prediction)

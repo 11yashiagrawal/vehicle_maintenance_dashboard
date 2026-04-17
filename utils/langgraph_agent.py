@@ -4,7 +4,9 @@ from langgraph.graph import StateGraph
 
 from utils.agent_logic import (
     build_action_plan,
+    build_fleet_policy_checks,
     build_retrieval_query,
+    build_service_outlook,
     extract_vehicle_signals,
     extract_user_query,
     maybe_enrich_with_llm,
@@ -46,6 +48,16 @@ def report_node(state: AgentState):
     prediction = state["prediction"]
     normalized_input = state["normalized_input"]
     action_plan = build_action_plan(normalized_input, state["signals"], state["contexts"])
+    service_outlook = build_service_outlook(
+        normalized_input,
+        state["signals"],
+        prediction["risk_probability"],
+    )
+    fleet_policy_checks = build_fleet_policy_checks(
+        normalized_input,
+        state["signals"],
+        prediction["risk_probability"],
+    )
 
     base_report = {
         "health_summary": {
@@ -65,6 +77,8 @@ def report_node(state: AgentState):
         "retrieval_query": build_retrieval_query(state["signals"], state.get("maintenance_query", "")),
         "retrieved_context": state["contexts"],
         "sources": state["contexts"],
+        "service_outlook": service_outlook,
+        "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,
         "disclaimer": (
             "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "

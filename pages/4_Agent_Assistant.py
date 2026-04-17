@@ -47,6 +47,54 @@ div.stButton > button[kind="primary"] * {
     color: #dffefe;
     font-size: 0.92rem;
 }
+
+.insight-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.2rem;
+}
+
+.insight-card {
+    background: rgba(10, 16, 21, 0.82);
+    border: 1px solid rgba(0, 255, 255, 0.18);
+    border-radius: 16px;
+    padding: 1rem;
+}
+
+.insight-label {
+    color: #9ed9dd;
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.insight-value {
+    color: #ffffff;
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-top: 0.35rem;
+}
+
+.policy-card {
+    background: rgba(18, 23, 17, 0.86);
+    border-left: 4px solid #f0c419;
+    border-radius: 14px;
+    padding: 1rem 1rem 0.9rem;
+    margin-bottom: 0.9rem;
+}
+
+.policy-card h4 {
+    margin: 0 0 0.4rem 0;
+}
+
+.safety-note {
+    background: rgba(61, 61, 8, 0.72);
+    border: 1px solid rgba(240, 196, 25, 0.24);
+    border-radius: 14px;
+    padding: 0.95rem 1rem;
+    margin-top: 1.1rem;
+}
 """)
 
 
@@ -80,6 +128,45 @@ def render_action_plan(action_plan: list[dict]) -> None:
         )
 
 
+def render_service_outlook(service_outlook: dict) -> None:
+    st.subheader("📅 Service Planning Outlook")
+    st.markdown(
+        f"""
+        <div class="insight-grid">
+            <div class="insight-card">
+                <div class="insight-label">Inspection Window</div>
+                <div class="insight-value">{service_outlook.get("inspection_window", "Not set")}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Downtime Risk</div>
+                <div class="insight-value">{service_outlook.get("downtime_risk", "Unknown")}</div>
+            </div>
+            <div class="insight-card">
+                <div class="insight-label">Primary Workshop Focus</div>
+                <div class="insight-value">{service_outlook.get("primary_focus", "Routine inspection")}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info(service_outlook.get("operating_advice", "No operating advice available."))
+
+
+def render_policy_checks(policy_checks: list[dict]) -> None:
+    st.subheader("🏢 Fleet Policy Checks")
+    for item in policy_checks:
+        st.markdown(
+            f"""
+            <div class="policy-card">
+                <h4>{item.get("title", "Policy Check")}</h4>
+                <p><strong>Status:</strong> {item.get("status", "Unknown")}</p>
+                <p>{item.get("detail", "No detail available.")}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def render_report(report: dict) -> None:
     health_summary = report.get("health_summary", {})
     risk_prediction = report.get("risk_prediction", 0)
@@ -87,7 +174,8 @@ def render_report(report: dict) -> None:
     risk_level = str(health_summary.get("risk_level", report.get("risk_level", "UNKNOWN")))
     key_issues = health_summary.get("key_issues", report.get("key_issues", []))
     maintenance_query = report.get("maintenance_query", "")
-    retrieval_mode = report.get("retrieval_mode", "UNKNOWN")
+    service_outlook = report.get("service_outlook", {})
+    policy_checks = report.get("fleet_policy_checks", [])
 
     st.markdown("### 🚦 Agent Summary")
     col1, col2, col3 = st.columns([1.2, 1, 1])
@@ -103,12 +191,6 @@ def render_report(report: dict) -> None:
     with col3:
         st.metric("Risk Level", risk_level.title())
 
-    status_cols = st.columns(2)
-    with status_cols[0]:
-        st.metric("Retrieval Mode", retrieval_mode)
-    with status_cols[1]:
-        st.metric("Sources Used", len(report.get("sources", [])))
-
     if maintenance_query:
         st.markdown("### 💬 Maintenance Query")
         st.info(maintenance_query)
@@ -116,26 +198,21 @@ def render_report(report: dict) -> None:
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
 
+    render_service_outlook(service_outlook)
+    render_policy_checks(policy_checks)
     render_action_plan(report.get("action_plan", []))
 
-    with st.expander("📚 Sources & Maintenance Guidance", expanded=True):
-        sources = report.get("sources", report.get("retrieved_context", []))
-        if sources:
-            for idx, source in enumerate(sources, start=1):
-                st.markdown(f"**Source {idx}**")
-                st.write(source)
-                if idx != len(sources):
-                    st.markdown("---")
-        else:
-            st.info("No maintenance sources were retrieved.")
-
-    st.warning(report.get(
-        "disclaimer",
-        "This assistant provides decision support only. Confirm safety-critical actions with a certified technician."
-    ))
-
-    with st.expander("🧾 Raw Agent Output"):
-        st.json(report)
+    st.markdown(
+        f"""
+        <div class="safety-note">
+            <strong>Safety Notice:</strong> {report.get(
+                "disclaimer",
+                "This assistant provides decision support only. Confirm safety-critical actions with a certified technician."
+            )}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 st.markdown("""
@@ -148,7 +225,7 @@ with st.container():
         """
         <div class="agent-card">
             <h3>What this page does</h3>
-            <p>This assistant combines your trained maintenance model, rule-based diagnostics, document retrieval, and optional Ollama enrichment to create a practical service report.</p>
+            <p>This assistant combines your trained maintenance model, rule-based diagnostics, retrieval, and optional Ollama enrichment to generate inspection priorities, service planning, and fleet policy checks.</p>
         </div>
         """,
         unsafe_allow_html=True,

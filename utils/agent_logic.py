@@ -150,6 +150,118 @@ def build_action_plan(input_data: Dict, signals: List[Dict[str, str]], contexts:
     return action_plan
 
 
+def build_service_outlook(input_data: Dict, signals: List[Dict[str, str]], risk_score: float) -> Dict[str, str]:
+    if risk_score >= 0.8:
+        inspection_window = "Immediate workshop intake"
+        downtime_risk = "High"
+        operating_advice = "Avoid long-haul or passenger-critical duty until inspection is completed."
+    elif risk_score >= 0.5:
+        inspection_window = "Within 48 hours"
+        downtime_risk = "Moderate"
+        operating_advice = "Allow restricted operations and monitor telemetry between trips."
+    else:
+        inspection_window = "Next planned maintenance window"
+        downtime_risk = "Low"
+        operating_advice = "Vehicle can remain in service with routine monitoring."
+
+    focus_areas = []
+    if any("overheating" in signal["issue"] for signal in signals):
+        focus_areas.append("cooling system and oil health")
+    if any("vibration" in signal["issue"] for signal in signals):
+        focus_areas.append("mounts, wheels, and drivetrain alignment")
+    if any("battery" in signal["issue"] for signal in signals):
+        focus_areas.append("battery and charging system")
+    if any("fault" in signal["issue"] for signal in signals):
+        focus_areas.append("ECU diagnostics and recurring fault clusters")
+
+    if not focus_areas:
+        focus_areas.append("routine preventive inspection")
+
+    return {
+        "inspection_window": inspection_window,
+        "downtime_risk": downtime_risk,
+        "operating_advice": operating_advice,
+        "primary_focus": ", ".join(focus_areas[:3]),
+    }
+
+
+def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], risk_score: float) -> List[Dict[str, str]]:
+    checks: List[Dict[str, str]] = []
+
+    age = float(input_data.get("vehicle_age_years", 0))
+    days_since_service = int(input_data.get("days_since_last_service", 0))
+    vehicle_type = str(input_data.get("vehicle_type", "Vehicle"))
+    road_condition = str(input_data.get("road_condition", "Urban"))
+    weather = str(input_data.get("weather_condition", "Normal"))
+
+    if age >= 7 and vehicle_type in {"Truck", "Van", "SUV"}:
+        checks.append({
+            "title": "Lifecycle Review Trigger",
+            "status": "Attention",
+            "detail": (
+                f"{vehicle_type} units older than 7 years should enter a fleet lifecycle review for deep inspection, "
+                "major component replacement planning, or phased retirement assessment."
+            ),
+        })
+
+    if days_since_service > 180:
+        checks.append({
+            "title": "Preventive Maintenance SLA Breach",
+            "status": "Critical",
+            "detail": (
+                "The vehicle is beyond the recommended service interval, so it should be prioritized in the maintenance queue."
+            ),
+        })
+
+    if any("recurring fault activity" == signal["issue"] for signal in signals):
+        checks.append({
+            "title": "Diagnostic Escalation",
+            "status": "Critical",
+            "detail": (
+                "Repeated fault activity should be escalated from basic service to root-cause diagnostics before the vehicle returns to full duty."
+            ),
+        })
+
+    if road_condition == "Highway" and risk_score >= 0.7:
+        checks.append({
+            "title": "Route Assignment Restriction",
+            "status": "Attention",
+            "detail": (
+                "High-risk vehicles should be moved off long continuous highway duty until inspection confirms stable operating health."
+            ),
+        })
+
+    if weather in {"Hot", "Cold"} and risk_score >= 0.5:
+        checks.append({
+            "title": "Weather Sensitivity Alert",
+            "status": "Monitor",
+            "detail": (
+                f"{weather} weather increases stress on temperature-sensitive and electrical systems, so telemetry should be reviewed more frequently."
+            ),
+        })
+
+    if not checks:
+        checks.append({
+            "title": "Fleet Policy Status",
+            "status": "Clear",
+            "detail": "No immediate policy or lifecycle triggers were raised from the current vehicle profile.",
+        })
+
+    return checks
+
+
+def merge_report(base_report: Dict, enriched: Dict) -> Dict:
+    merged = dict(base_report)
+    for key, value in enriched.items():
+        if isinstance(value, dict) and isinstance(base_report.get(key), dict):
+            nested = dict(base_report[key])
+            nested.update(value)
+            merged[key] = nested
+        else:
+            merged[key] = value
+    return merged
+
+
 def maybe_enrich_with_llm(base_report: Dict, input_data: Dict, contexts: List[str]) -> Dict:
     try:
         from langchain_ollama import ChatOllama
@@ -185,7 +297,7 @@ BASE_REPORT:
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         enriched = json.loads(content)
         if isinstance(enriched, dict) and "action_plan" in enriched:
-            return enriched
+            return merge_report(base_report, enriched)
     except Exception:
         return base_report
 
@@ -202,6 +314,8 @@ def analyze_vehicle(input_data: Dict) -> Dict:
     signals = extract_vehicle_signals(normalized_input, risk_score)
     contexts = retrieve_maintenance_context(signals, maintenance_query)
     action_plan = build_action_plan(normalized_input, signals, contexts)
+    service_outlook = build_service_outlook(normalized_input, signals, risk_score)
+    fleet_policy_checks = build_fleet_policy_checks(normalized_input, signals, risk_score)
 
     report = {
         "health_summary": {
@@ -220,6 +334,8 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "retrieval_mode": get_retriever_mode(),
         "retrieved_context": contexts,
         "sources": contexts,
+        "service_outlook": service_outlook,
+        "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,
         "disclaimer": (
             "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "
