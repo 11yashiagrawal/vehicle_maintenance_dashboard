@@ -342,13 +342,63 @@ The pipeline executes holistically, establishing an immediate feedback loop brid
     \item \textbf{Generative Agent Delivery:} The reporting nodes bundle, format, LLM-enrich, and render comprehensive prescriptive fleet instructions seamlessly back to the UI.
 \end{enumerate}
 
-\begin{figure}[H]
-    \centering
-    % \includegraphics[width=0.95\textwidth]{images/diagram.png}
-    \rule{0.95\textwidth}{8cm} % Placeholder for diagram.png
-    \caption{Complete end-to-end Machine Learning \& Agentic Diagnostic Flow architecture}
-    \label{fig:architecture_diagram}
-\end{figure}
+\section{Why This Architecture Matters}
+
+The main contribution of this project is that it does not stop at binary risk prediction. The deployed system combines a predictive classifier with a structured agent layer that explains the result, retrieves relevant maintenance context, and converts the prediction into a practical maintenance plan. This makes the system more useful for fleet operators than a raw probability score alone, because the output is interpretable, traceable, and action-oriented.
+
+\section{Agent Output Example}
+
+For a sample maintenance query such as \textit{``This truck is overheating, vibrating, and overdue for service. What should be checked first?''}, the agent produces a structured response rather than a single label. The response includes a short risk summary, a prioritized action plan, retrieved maintenance context, and policy checks.
+
+\begin{table}[H]
+\centering
+\caption{Example of Agent Output Structure}
+\begin{tabularx}{\textwidth}{p{3.5cm}X}
+\toprule
+\textbf{Output Component} & \textbf{Example Content} \\
+\midrule
+Risk Summary & Maintenance required with a high-risk label based on the combined telemetry profile. \\
+Action Plan & Inspect the cooling system, battery health, vibration sources, and overdue service items in priority order. \\
+Retrieved Context & Relevant maintenance guidance from the knowledge base on overheating, repeated faults, and preventive service intervals. \\
+Policy Checks & Flags for service overdue conditions, lifecycle review triggers, and route restriction under elevated risk. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Case Study: Direct Prediction vs Agent Interpretation}
+
+Using the same vehicle input, the direct predictor returns a numerical risk probability, while the agent turns that probability into a maintenance explanation. This distinction is important because a probability alone does not tell the user what subsystem to inspect first or why the vehicle is at risk. The agent output is therefore easier to interpret in operational settings, especially when multiple indicators contribute to the prediction.
+
+In this project, the agent uses the same model output as the predictor, but it adds rule-based signals, retrieved documentation, and a structured response format. As a result, the final output is more useful for decision-making than a standalone score.
+
+\section{Implementation Summary}
+
+\begin{table}[H]
+\centering
+\caption{Implemented Modules Summary}
+\begin{tabularx}{\textwidth}{p{4cm}X}
+\toprule
+\textbf{Module} & \textbf{Purpose} \\
+\midrule
+\texttt{utils/preprocessor.py} & Normalizes raw inputs, computes engineered features, and handles unknown fault-code values consistently. \\
+\texttt{utils/model\_tool.py} & Loads the trained model and produces prediction probability, class label, and risk score. \\
+\texttt{pages/prediction.py} & Provides the interactive prediction interface for direct maintenance risk scoring. \\
+\texttt{utils/langgraph\_agent.py} & Orchestrates the validate, score, retrieve, and report nodes in the agent workflow. \\
+\texttt{utils/retriever.py} & Retrieves maintenance context using keyword search or optional FAISS-based retrieval. \\
+\texttt{utils/agent\_logic.py} & Builds signals, action plans, policy checks, and the final structured agent response. \\
+\texttt{test\_agents.py} and \texttt{test\_langgraph.py} & Validate the agent pipeline, output structure, and integration behavior. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Limitations and Future Work}
+
+\begin{itemize}
+\item The model depends on fault-code count as an influential feature, so missing diagnostic information can still affect reliability.
+\item The dataset is structured and project-oriented, so future validation on real fleet data is necessary before production use.
+\item The current retriever is keyword-based by default, so broader semantic retrieval could improve context quality.
+\item Future work can include calibration, stronger uncertainty handling, and comparison against additional maintenance models.
+\end{itemize}
 
 \newpage
 \section{Repository Architecture}
@@ -384,8 +434,8 @@ To ensure sustainable production scaling, the repository segregates functional c
 \midrule
 Data Preprocessing \& Pipeline & pandas, NumPy, scikit-learn \\
 Model Generation Frameworks & XGBoost, RandomizedSearchCV \\
-Agentic System Workflow & LangGraph, Langchain \\
-Generative Intelligence \& Retrieval & ChatOllama, Chroma Vector Search \\
+Agentic System Workflow & LangGraph, LangChain \\
+Generative Intelligence \& Retrieval & ChatOllama, keyword retrieval, optional FAISS \\
 Deployment \& Web Interface & Streamlit, HTML/CSS Integrations \\
 System Persistence & joblib \\
 \bottomrule
@@ -396,13 +446,33 @@ System Persistence & joblib \\
 
 \begin{center}
 \colorbox{solarblue!8}{\parbox{0.9\textwidth}{\centering
-\textbf{\color{solarblue}Operational Achievement:} By coupling a robust XGBoost risk-estimator capable of 0.92 ROC-AUC predictability directly into a deterministic LangGraph agentic chain, this solution radically upgrades asset management platforms constraints from passive binary identification systems to fully capable, prescriptive, and cognitive autonomous operational fleet dispatchers.
+\textbf{\color{solarblue}Key Outcome:} The project combines a tuned XGBoost risk model with a LangGraph-based agent to provide both maintenance prediction and structured decision support for fleet operations.
 }}
 \end{center}
 
-This implementation firmly bridges the data science capabilities of precision telemetry encoding directly against actionable, stateful, and context-aware generative artificial intelligence.
+This implementation demonstrates how predictive maintenance can be extended into a practical decision-support system by linking telemetry-based prediction, contextual retrieval, and structured maintenance recommendations.
 
+\section{Team Contribution}
+
+The project was developed collaboratively with responsibilities distributed across model development, agent implementation, retrieval integration, and report preparation.
+
+\begin{table}[H]
+\centering
+\caption{Team Contribution Matrix}
+\begin{tabularx}{\textwidth}{p{3.2cm}X}
+\toprule
+\textbf{Team Member} & \textbf{Role and Responsibilities} \\
+\midrule
+Milind Bansal & \begin{tabular}[t]{@{}l@{}}Built the baseline and ensemble model pipelines.\\Deployed the agentic workflow in Streamlit.\\Validated the final prediction interface and outputs.\end{tabular} \\
+Isha Tomar & \begin{tabular}[t]{@{}l@{}}Conducted exploratory data analysis and feature engineering.\\Built the full LangGraph-based agent implementation.\\Integrated the end-to-end agent pipeline.\end{tabular} \\
+Yashi Agrawal & \begin{tabular}[t]{@{}l@{}}Developed the Streamlit deployment application.\\Implemented \texttt{agent\_logic.py} and response generation flow.\\Refined the UI integration.\end{tabular} \\
+Mansi Agarwal & \begin{tabular}[t]{@{}l@{}}Wrote and formatted the final report.\\Implemented the RAG layer and retrieval prompts.\\Validated agent outputs and documentation structure.\end{tabular} \\
+\bottomrule
+\end{tabularx}
+\end{table}
 \section{References}
+\begingroup
+\renewcommand{\section}[2]{}
 \begin{thebibliography}{9}
 
 \bibitem{github}
