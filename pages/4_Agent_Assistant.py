@@ -283,3 +283,9 @@ if run_agent:
 
     st.markdown("---")
     render_report(report)
+    if input_data.get("fault_code_count_unknown"):
+        st.warning(
+            "Fault code count was not provided, so the agent used a conservative estimate. "
+            "Provide the actual count if you have it for a more reliable report."
+        )
+

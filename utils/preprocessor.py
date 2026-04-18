@@ -33,6 +33,29 @@ def _default_step(feature_name: str) -> float:
     if "percent" in fname: return 1.0
     return 0.1
 
+def _estimate_fault_code_count(data: Dict[str, Any]) -> float:
+    """Estimate a conservative fault-code count when the user does not know it."""
+    score = 0.0
+
+    if float(data.get("mileage_km", 0.0)) >= 100_000:
+        score += 1.0
+    if float(data.get("vehicle_age_years", 0.0)) >= 15:
+        score += 1.0
+    if float(data.get("oil_temp_avg_celsius", 0.0)) >= 95:
+        score += 1.0
+    if float(data.get("vibration_level", 0.0)) >= 4:
+        score += 1.0
+    if float(data.get("battery_voltage", 15.0)) < 11.5:
+        score += 2.0
+    if float(data.get("engine_load_percent", 0.0)) >= 75:
+        score += 1.0
+    if float(data.get("fuel_efficiency_kmpl", 40.0)) <= 15:
+        score += 1.0
+    if float(data.get("days_since_last_service", 0.0)) >= 90:
+        score += 1.0
+
+    return float(max(1.0, min(score, 8.0)))
+
 def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: bool = False) -> Dict[str, Any]:
     """Generates a responsive grid of inputs, replacing days_since_last_service with a Date Picker."""
    
@@ -44,6 +67,10 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     ui.header("🔧 Vehicle Diagnostics")
     num_cols = max(1, num_cols)
     cols = ui.columns(num_cols)
+    fault_code_unknown = ui.checkbox(
+        "I do not know the fault code count",
+        help="If selected, the app will use a conservative estimate instead of treating the value as zero.",
+    )
 
     for idx, feature in enumerate(features):
         # We skip calculated features and one-hot columns in the numeric grid
@@ -64,12 +91,21 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
         col = cols[idx % num_cols]
         meta = NUMERIC_FEATURE_META.get(feature, {})
         with col:
+            if feature == "fault_code_count":
+                input_data["fault_code_count_unknown"] = fault_code_unknown
             input_data[feature] = col.number_input(
                 _get_feature_label(feature),
                 value=float(_default_value(feature)),
                 min_value=float(meta.get("min_value", 0.0)),
                 max_value=float(meta.get("max_value", 1000000.0)),
                 step=float(_default_step(feature)),
+                disabled=fault_code_unknown if feature == "fault_code_count" else False,
+                help=(
+                    "Leave this at zero only if there are truly no active codes. "
+                    "Use the checkbox above if you do not know the value."
+                    if feature == "fault_code_count"
+                    else None
+                ),
             )
             ui.caption(meta.get("range_hint", "Enter a realistic value."))
 
@@ -137,6 +173,18 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
         normalized["days_since_last_service"] = max(0, int(float(input_data["days_since_last_service"])))
     else:
         normalized["last_service_date"] = input_data.get("last_service_date", date.today())
+
+    fault_code_unknown = bool(input_data.get("fault_code_count_unknown", False))
+    raw_fault_code_count = input_data.get("fault_code_count")
+    if raw_fault_code_count is None or raw_fault_code_count == "":
+        normalized["fault_code_count"] = _estimate_fault_code_count(normalized)
+        normalized["fault_code_count_source"] = "estimated"
+    elif fault_code_unknown:
+        normalized["fault_code_count"] = _estimate_fault_code_count(normalized)
+        normalized["fault_code_count_source"] = "estimated"
+    else:
+        normalized["fault_code_count"] = float(raw_fault_code_count or 0.0)
+        normalized["fault_code_count_source"] = "provided"
 
     return calculate_internal_features(normalized)
 

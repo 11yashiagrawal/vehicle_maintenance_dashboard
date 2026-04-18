@@ -64,6 +64,7 @@ if predict_clicked:
         prediction = result["risk_prediction"]
         risk_score = result["risk_probability"]
         risk_label = result["risk_label"]
+        normalized_input = result["normalized_input"]
 
     with result_container:
         col1, col2, col3 = st.columns([1.2, 1, 1])
@@ -76,6 +77,12 @@ if predict_clicked:
             st.metric("Risk", f"{risk_score:.1%}")
         with col3:
             st.metric("Risk Level", risk_label.title())
+
+    if normalized_input.get("fault_code_count_source") == "estimated":
+        st.warning(
+            "Fault code count was not provided, so the app used a conservative estimate. "
+            "Enter the actual fault code count if you have it for a more reliable prediction."
+        )
 
 st.markdown("---")
 
