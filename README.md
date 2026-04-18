@@ -1,12 +1,12 @@
 # 🚗 Vehicle Maintenance Prediction & Agentic Fleet Management
 
 An end-to-end machine learning system that predicts whether a vehicle requires maintenance using structured operational telemetry data.  
-The pipeline performs exploratory data analysis, feature engineering, multi-model comparison, hyperparameter tuning, and deploys a tuned XGBoost classifier through an interactive Streamlit application.
+The system integrates an advanced **LangGraph-powered AI Agent** with a highly-tuned XGBoost classifier. The pipeline performs exploratory data analysis, comprehensive feature engineering, RAG-based document retrieval, and contextual maintenance triage through an interactive Streamlit application.
 
 > **Live Demo:** [[Deployed Web App]](https://vehicle-maintenance-dashboard.streamlit.app/)  
 > **Project Video:** [[Project Demo Link]](https://drive.google.com/file/d/1Zo7nhaxWIxzFFTYz8joRYZw6oG889lui/view?usp=drive_link)
 > **Colab Notebook Link:** [[Google Colab Notebook]](https://colab.research.google.com/drive/1GCYD7v7glAUhZDgZqOBbnpfGuIdSKBGr?usp=sharing)
-> **Project Report:** [[Project Report Link]](https://www.overleaf.com/read/rbhqrfcnfrdc#e72772)
+> **Project Report:** [[PDF Report]](./report/vehicle_maintenance_dashboard_report.pdf)
 
 ---
 
@@ -19,7 +19,7 @@ The pipeline performs exploratory data analysis, feature engineering, multi-mode
 | **Class Distribution** | ~75% No Maintenance / ~25% Maintenance                     |
 | **Models Compared**    | Logistic Regression, Decision Tree, Random Forest, XGBoost |
 | **Final Model**        | Tuned XGBoost (ROC-AUC = 0.92)                             |
-| **Stack**              | Python, pandas, scikit-learn, XGBoost, Streamlit           |
+| **Stack**              | Python, XGBoost, Streamlit, LangGraph, LangChain, FAISS    |
 | **Deployment**         | Streamlit Cloud                                            |
 
 ---
@@ -141,6 +141,17 @@ Deployment ensures:
 The deployed application allows fleet operators to input telemetry data and receive maintenance risk predictions instantly.
 
 ---
+
+## 🤖 Agentic Fleet Management (LangGraph)
+
+Beyond standard predictive modeling, this project features an embedded **LangGraph-driven AI Agent** to assist technicians and fleet operators. 
+
+The smart maintenance agent:
+- Implements a stateful Directed Acyclic Graph (DAG) for diagnostic routing.
+- Uses **RAG (Retrieval-Augmented Generation)** over maintenance manuals using **FAISS** and **Sentence Transformers**.
+- Dynamically generates actionable repair steps based on user queries, telemetry data, and risk predictions.
+- Enforces predefined fleet safety policies through autonomous rule-based checks.
+
 ---
 
 ## System Architecture
@@ -148,15 +159,11 @@ The deployed application allows fleet operators to input telemetry data and rece
 The end-to-end pipeline follows this structured workflow:
 
 1. Raw Fleet Telemetry Data  
-2. Data Cleaning & Missing Value Treatment  
-3. Feature Engineering  
-4. Stratified Train-Test Split  
-5. Progressive Model Comparison  
-6. Hyperparameter Tuning (RandomizedSearchCV)  
-7. Model Serialization (joblib)  
-8. Streamlit Deployment with Real-time Inference  
-
-The deployed application ensures consistent preprocessing and feature order preservation during inference.
+2. Data Cleaning & Feature Engineering  
+3. XGBoost Hyperparameter Tuning & Model Serialization
+4. Local Vector Database (FAISS) Generation for Manuals
+5. LangGraph Agent Pipeline Construction
+6. Streamlit Deployment with Real-time ML Inference and Agent Context
 ## 🚀 Getting Started
 
 Follow these steps to set up and run the application on your local machine.
@@ -212,9 +219,10 @@ streamlit run Home.py
 | Layer            | Technology Used |
 |------------------|-----------------|
 | Data Processing  | pandas, numpy   |
-| Visualization    | matplotlib, seaborn |
 | Modeling         | scikit-learn, XGBoost |
-| Optimization     | RandomizedSearchCV |
+| Agentic Workflow | LangGraph, LangChain |
+| RAG & Retrieval  | FAISS, SentenceTransformers |
+| LLM Engine       | Ollama (Local) |
 | Deployment       | Streamlit |
 | Serialization    | joblib |
 
@@ -246,3 +254,4 @@ vehicle_maintenance_dashboard/
 2. **Data Insights**: Interactive EDA including class balance and dynamic boxplots for outlier detection.
 3. **Model Insights**: Detailed breakdown of the engineered features and model strategy.
 4. **Prediction**: Live risk-scoring interface. Select your vehicle details and last service date to receive a pro-active maintenance recommendation.
+5. **Agent Assistant**: AI-powered maintenance agent using LangGraph and RAG to provide personalized diagnostic reports, prioritize mechanical issues, and verify fleet compliance policies.
