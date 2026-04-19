@@ -173,7 +173,6 @@ div.stButton > button[kind="primary"] * {
 """)
 
 
-@st.cache_resource
 def load_agent():
     return build_agent()
 
@@ -300,10 +299,16 @@ def render_decision_trace(report: dict, submission_summary: dict | None = None) 
         )
     ).replace("_", " ").title()
     parsed_facts = trace.get("parsed_query_facts", {}) or {}
-    detected_signals = trace.get("detected_signals", []) or []
+    detected_signals = trace.get("detected_signals") or report.get("key_issues", []) or []
+    if isinstance(detected_signals, list):
+        detected_signals = [issue for issue in detected_signals if issue != "no immediate critical issue"]
     retrieval_query = trace.get("retrieval_query", "")
     retrieval_mode = trace.get("retrieval_mode", "KEYWORD")
-    top_recommendation = trace.get("top_recommendation", "Preventive Monitoring")
+    top_recommendation = trace.get("top_recommendation") or (
+        report.get("action_plan", [{}])[0].get("issue", "Preventive Monitoring")
+        if isinstance(report.get("action_plan"), list) and report.get("action_plan")
+        else "Preventive Monitoring"
+    )
     query_present = bool(submission_summary.get("query_present", trace.get("query_present")))
     telemetry_present = bool(submission_summary.get("telemetry_present", trace.get("telemetry_present")))
     telemetry_count = int(submission_summary.get("filled_telemetry_count", 0))

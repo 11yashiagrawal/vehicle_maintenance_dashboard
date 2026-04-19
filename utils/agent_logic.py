@@ -65,6 +65,25 @@ def detect_request_mode(input_data: Dict) -> str:
     return "empty"
 
 
+def _query_mentions_overdue_service(query: str) -> bool:
+    return bool(
+        re.search(r"(service|maintenance)[\w\s]{0,20}(overdue|delayed|missed)", query)
+        or re.search(r"(overdue|delayed|missed)[\w\s]{0,20}(service|maintenance)", query)
+        or re.search(r"(service|maintenance)[\w\s]{0,20}due", query)
+    )
+
+
+def _query_mentions_fault_codes(query: str) -> bool:
+    return bool(
+        re.search(r"\bfault\b", query)
+        or re.search(r"fault\s*codes?", query)
+        or re.search(r"error\s*codes?", query)
+        or re.search(r"warning\s*codes?", query)
+        or re.search(r"\bdtc\b", query)
+        or re.search(r"diagnostic\s*codes?", query)
+    )
+
+
 def validate_vehicle_input(input_data: Dict) -> Dict:
     return normalize_input_data(input_data)
 
@@ -113,12 +132,14 @@ def parse_query_facts(maintenance_query: str) -> Dict:
         parsed["vibration_level"] = max(float(parsed.get("vibration_level", 0.0)), 8.0)
     if any(token in query for token in ["battery", "not starting", "won't start", "wont start", "dead battery", "starting issue"]):
         parsed["battery_voltage"] = min(float(parsed.get("battery_voltage", 15.0)), 11.2)
-    if any(token in query for token in ["fault", "error code", "warning code", "dtc", "diagnostic code"]):
+    if _query_mentions_fault_codes(query):
         parsed["fault_code_count"] = min(
             QUERY_FAULT_CODE_MAX,
             max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_BASELINE),
         )
-    if any(token in query for token in ["overdue service", "not serviced", "service overdue", "missed service", "service delay"]):
+    if _query_mentions_overdue_service(query) or any(
+        token in query for token in ["not serviced", "service delay"]
+    ):
         parsed["days_since_last_service"] = max(
             float(parsed.get("days_since_last_service", 0.0)),
             float(SERVICE_OVERDUE_DAYS_THRESHOLD + 10),
@@ -233,7 +254,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "query": "battery voltage degradation charging system",
             })
 
-        if any(token in query for token in ["fault", "error code", "warning code", "dtc", "diagnostic code"]) and not has_issue("fault"):
+        if _query_mentions_fault_codes(query) and not has_issue("fault"):
             signals.append({
                 "issue": "recurring fault activity",
                 "reason": "The query references fault/diagnostic codes, suggesting unresolved subsystem alerts.",
@@ -242,7 +263,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "query": "fault codes recurring faults diagnostics",
             })
 
-        if any(token in query for token in ["overdue service", "not serviced", "service overdue", "missed service", "service delay"]) and not has_issue("service overdue"):
+        if (_query_mentions_overdue_service(query) or any(token in query for token in ["not serviced", "service delay"])) and not has_issue("service overdue"):
             signals.append({
                 "issue": "service overdue",
                 "reason": "The query indicates delayed preventive maintenance and elevated wear risk.",
