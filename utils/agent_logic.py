@@ -24,6 +24,47 @@ from utils.retriever import get_retriever_mode, load_retriever
 logger = logging.getLogger(__name__)
 
 
+def _has_meaningful_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (int, float)):
+        return float(value) != 0.0
+    return bool(value)
+
+
+def detect_request_mode(input_data: Dict) -> str:
+    has_query = _has_meaningful_value(input_data.get("maintenance_query"))
+    telemetry_keys = [
+        "mileage_km",
+        "engine_hours",
+        "vehicle_age_years",
+        "fault_code_count",
+        "oil_temp_avg_celsius",
+        "vibration_level",
+        "battery_voltage",
+        "engine_load_percent",
+        "fuel_efficiency_kmpl",
+        "days_since_last_service",
+        "last_service_date",
+        "vehicle_type",
+        "fuel_type",
+        "region",
+        "road_condition",
+        "weather_condition",
+    ]
+    has_telemetry = any(_has_meaningful_value(input_data.get(key)) for key in telemetry_keys)
+
+    if has_query and has_telemetry:
+        return "combined"
+    if has_query:
+        return "query_only"
+    if has_telemetry:
+        return "input_only"
+    return "empty"
+
+
 def validate_vehicle_input(input_data: Dict) -> Dict:
     return normalize_input_data(input_data)
 
@@ -545,6 +586,7 @@ BASE_REPORT:
 
 
 def analyze_vehicle(input_data: Dict) -> Dict:
+    request_mode = detect_request_mode(input_data)
     maintenance_query = extract_user_query(input_data)
     parsed_query_facts = parse_query_facts(maintenance_query)
     merged_input = merge_query_into_input(input_data, parsed_query_facts)
@@ -569,6 +611,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
     )
 
     report = {
+        "request_mode": request_mode,
         "health_summary": {
             "vehicle_status": (
                 "Maintenance Required" if prediction["risk_prediction"] == 1 else "No Immediate Maintenance Needed"
@@ -590,6 +633,16 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "service_outlook": service_outlook,
         "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,
+        "decision_trace": {
+            "request_mode": request_mode,
+            "query_present": bool(maintenance_query.strip()),
+            "telemetry_present": request_mode in {"input_only", "combined"},
+            "parsed_query_facts": parsed_query_facts,
+            "detected_signals": [signal["issue"] for signal in signals],
+            "retrieval_query": build_retrieval_query(signals, maintenance_query),
+            "retrieval_mode": get_retriever_mode(),
+            "top_recommendation": action_plan[0]["issue"] if action_plan else "Preventive Monitoring",
+        },
         "disclaimer": (
             "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "
             "when necessary and consult a certified technician or fleet supervisor before further use."

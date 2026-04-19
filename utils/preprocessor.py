@@ -25,6 +25,26 @@ def _get_feature_label(feature: str) -> str:
     return meta.get("label", feature.replace("_", " ").title())
 
 def _default_numeric_fallback(feature: str) -> float:
+    safe_defaults = {
+        "mileage_km": 0.0,
+        "engine_hours": 0.0,
+        "vehicle_age_years": 0.0,
+        "fault_code_count": 0.0,
+        "oil_temp_avg_celsius": 85.0,
+        "vibration_level": 0.0,
+        "battery_voltage": 12.6,
+        "engine_load_percent": 0.0,
+        "fuel_efficiency_kmpl": 18.0,
+        "days_since_last_service": 0.0,
+        "mileage_per_year": 0.0,
+        "thermal_stress": 0.0,
+        "engine_hours_per_km": 0.0,
+        "fault_density": 0.0,
+        "load_efficiency": 0.0,
+    }
+    if feature in safe_defaults:
+        return safe_defaults[feature]
+
     meta = NUMERIC_FEATURE_META.get(feature, {})
     min_value = float(meta.get("min_value", 0.0))
     max_value = float(meta.get("max_value", min_value))

@@ -8,6 +8,7 @@ from utils.agent_logic import (
     build_query_response,
     build_retrieval_query,
     build_service_outlook,
+    detect_request_mode,
     extract_vehicle_signals,
     extract_user_query,
     merge_query_into_input,
@@ -67,6 +68,7 @@ def report_node(state: AgentState):
     normalized_input = state.get("normalized_input", {})
     signals = state.get("signals", [])
     contexts = state.get("contexts", [])
+    request_mode = detect_request_mode(state.get("input_data", {}))
 
     action_plan = build_action_plan(normalized_input, signals, contexts)
     action_plan = prioritize_action_plan(action_plan, state.get("maintenance_query", ""))
@@ -90,6 +92,7 @@ def report_node(state: AgentState):
     )
 
     base_report = {
+        "request_mode": request_mode,
         "health_summary": {
             "vehicle_status": (
                 "Maintenance Required" if int(prediction.get("risk_prediction", 0)) == 1 else "No Immediate Maintenance Needed"
@@ -112,6 +115,16 @@ def report_node(state: AgentState):
         "service_outlook": service_outlook,
         "fleet_policy_checks": fleet_policy_checks,
         "action_plan": action_plan,
+        "decision_trace": {
+            "request_mode": request_mode,
+            "query_present": bool(str(state.get("maintenance_query", "")).strip()),
+            "telemetry_present": request_mode in {"input_only", "combined"},
+            "parsed_query_facts": state.get("parsed_query_facts", {}),
+            "detected_signals": [signal["issue"] for signal in signals],
+            "retrieval_query": build_retrieval_query(signals, state.get("maintenance_query", "")),
+            "retrieval_mode": get_retriever_mode(),
+            "top_recommendation": action_plan[0]["issue"] if action_plan else "Preventive Monitoring",
+        },
         "disclaimer": (
             "This assistant provides decision support only. For safety-critical faults, stop operating the vehicle "
             "when necessary and consult a certified technician or fleet supervisor before further use."

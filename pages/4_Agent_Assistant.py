@@ -108,6 +108,67 @@ div.stButton > button[kind="primary"] * {
 .answer-card h3 {
     margin-top: 0;
 }
+
+.trace-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.25rem;
+}
+
+.trace-card {
+    background: linear-gradient(180deg, rgba(10, 18, 24, 0.92), rgba(8, 15, 19, 0.96));
+    border: 1px solid rgba(0, 255, 255, 0.16);
+    border-radius: 16px;
+    padding: 1rem 1.05rem;
+}
+
+.trace-label {
+    color: #9ed9dd;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.trace-value {
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-top: 0.35rem;
+}
+
+.mode-pill {
+    display: inline-block;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(0, 255, 255, 0.12);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    color: #dffefe;
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+}
+
+.why-box {
+    background: rgba(10, 23, 29, 0.9);
+    border: 1px solid rgba(0, 255, 255, 0.16);
+    border-radius: 18px;
+    padding: 1rem 1.1rem;
+    margin: 1rem 0 1.25rem;
+}
+
+.why-title {
+    color: #00ffff;
+    font-weight: 800;
+    margin-bottom: 0.45rem;
+}
+
+.why-list {
+    margin: 0.35rem 0 0 1.15rem;
+}
+
+.why-list li {
+    margin-bottom: 0.3rem;
+}
 """)
 
 
@@ -196,6 +257,84 @@ def render_query_response(query_response: dict) -> None:
         st.markdown(" | ".join(pretty_facts))
 
 
+def render_decision_trace(report: dict) -> None:
+    trace = report.get("decision_trace", {}) or {}
+    request_mode = str(report.get("request_mode", trace.get("request_mode", "unknown"))).replace("_", " ").title()
+    parsed_facts = trace.get("parsed_query_facts", {}) or {}
+    detected_signals = trace.get("detected_signals", []) or []
+    retrieval_query = trace.get("retrieval_query", "")
+    retrieval_mode = trace.get("retrieval_mode", "KEYWORD")
+    top_recommendation = trace.get("top_recommendation", "Preventive Monitoring")
+
+    st.markdown("### 🧭 Decision Trace")
+    st.markdown(
+        f"""
+        <div class="why-box">
+            <div class="why-title">How the agent formed this answer</div>
+            <div>The run mode was <span class="mode-pill">{request_mode}</span>.</div>
+            <ul class="why-list">
+                <li>Query clues were parsed into maintenance facts before scoring.</li>
+                <li>Telemetry values were normalized and scored by the model.</li>
+                <li>Local retrieval mode: <strong>{retrieval_mode}</strong>.</li>
+                <li>Top recommendation: <strong>{top_recommendation}</strong>.</li>
+            </ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(
+            f"""
+            <div class="trace-card">
+                <div class="trace-label">Query Parsed</div>
+                <div class="trace-value">{'Yes' if trace.get('query_present') else 'No'}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col2:
+        st.markdown(
+            f"""
+            <div class="trace-card">
+                <div class="trace-label">Telemetry Used</div>
+                <div class="trace-value">{'Yes' if trace.get('telemetry_present') else 'No'}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col3:
+        st.markdown(
+            f"""
+            <div class="trace-card">
+                <div class="trace-label">Signals Detected</div>
+                <div class="trace-value">{len(detected_signals)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    if parsed_facts:
+        st.markdown("#### Query Facts Used")
+        fact_columns = st.columns(min(3, len(parsed_facts)))
+        for idx, (key, value) in enumerate(parsed_facts.items()):
+            col = fact_columns[idx % len(fact_columns)]
+            with col:
+                st.markdown(
+                    f"""
+                    <div class="trace-card">
+                        <div class="trace-label">{key.replace('_', ' ').title()}</div>
+                        <div class="trace-value">{value}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    if retrieval_query:
+        st.caption(f"Retrieval query used: {retrieval_query}")
+
+
 def render_report(report: dict) -> None:
     health_summary = report.get("health_summary", {})
     risk_prediction = report.get("risk_prediction", 0)
@@ -206,8 +345,9 @@ def render_report(report: dict) -> None:
     query_response = report.get("query_response", {})
     parsed_query_facts = report.get("parsed_query_facts", {})
     policy_checks = report.get("fleet_policy_checks", [])
+    request_mode = str(report.get("request_mode", "unknown")).replace("_", " ").title()
 
-    st.markdown("### 🚦 Agent Summary")
+    st.markdown(f"### 🚦 Agent Summary <span class='mode-pill'>{request_mode}</span>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1.2, 1, 1])
     with col1:
         if risk_prediction == 1 or risk_level.upper() == "HIGH":
@@ -227,6 +367,8 @@ def render_report(report: dict) -> None:
         render_query_response(query_response)
     elif parsed_query_facts:
         st.caption("Parsed query facts were applied to this report.")
+
+    render_decision_trace(report)
 
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
