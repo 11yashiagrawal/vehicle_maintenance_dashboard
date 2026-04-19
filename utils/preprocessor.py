@@ -13,6 +13,13 @@ from utils.config import (
     NUMERIC_FEATURE_META,
 )
 
+
+def _clamp_numeric(feature: str, value: float) -> float:
+    meta = NUMERIC_FEATURE_META.get(feature, {})
+    min_value = float(meta.get("min_value", -1_000_000_000.0))
+    max_value = float(meta.get("max_value", 1_000_000_000.0))
+    return max(min_value, min(max_value, float(value)))
+
 def _get_feature_label(feature: str) -> str:
     meta = NUMERIC_FEATURE_META.get(feature, {})
     return meta.get("label", feature.replace("_", " ").title())
@@ -162,7 +169,8 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {}
 
     for feature in INPUT_NUMERIC_FEATURES:
-        normalized[feature] = float(input_data.get(feature, 0.0) or 0.0)
+        raw_value = float(input_data.get(feature, 0.0) or 0.0)
+        normalized[feature] = _clamp_numeric(feature, raw_value)
 
     for feature in INPUT_CATEGORICAL_FEATURES:
         options = CATEGORICAL_OPTIONS[feature]
@@ -172,7 +180,13 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
     if "days_since_last_service" in input_data and input_data["days_since_last_service"] is not None:
         normalized["days_since_last_service"] = max(0, int(float(input_data["days_since_last_service"])))
     else:
-        normalized["last_service_date"] = input_data.get("last_service_date", date.today())
+        service_date = input_data.get("last_service_date", date.today())
+        if isinstance(service_date, str):
+            try:
+                service_date = date.fromisoformat(service_date)
+            except ValueError:
+                service_date = date.today()
+        normalized["last_service_date"] = service_date
 
     fault_code_unknown = bool(input_data.get("fault_code_count_unknown", False))
     raw_fault_code_count = input_data.get("fault_code_count")
@@ -183,7 +197,7 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
         normalized["fault_code_count"] = _estimate_fault_code_count(normalized)
         normalized["fault_code_count_source"] = "estimated"
     else:
-        normalized["fault_code_count"] = float(raw_fault_code_count or 0.0)
+        normalized["fault_code_count"] = _clamp_numeric("fault_code_count", float(raw_fault_code_count or 0.0))
         normalized["fault_code_count_source"] = "provided"
 
     return calculate_internal_features(normalized)

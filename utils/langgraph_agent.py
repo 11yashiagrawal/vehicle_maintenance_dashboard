@@ -33,9 +33,10 @@ class AgentState(TypedDict, total=False):
 
 
 def validate_node(state: AgentState):
-    maintenance_query = extract_user_query(state["input_data"])
+    input_data = state.get("input_data", {})
+    maintenance_query = extract_user_query(input_data)
     parsed_query_facts = parse_query_facts(maintenance_query)
-    merged_input = merge_query_into_input(state["input_data"], parsed_query_facts)
+    merged_input = merge_query_into_input(input_data, parsed_query_facts)
     normalized_input = validate_vehicle_input(merged_input)
     return {
         "normalized_input": normalized_input,
@@ -45,59 +46,64 @@ def validate_node(state: AgentState):
 
 
 def score_node(state: AgentState):
-    prediction = predict_risk(state["normalized_input"])
-    signals = extract_vehicle_signals(state["normalized_input"], prediction["risk_probability"])
+    normalized_input = state.get("normalized_input", {})
+    prediction = predict_risk(normalized_input)
+    signals = extract_vehicle_signals(normalized_input, prediction["risk_probability"])
     return {"prediction": prediction, "signals": signals}
 
 
 def retrieve_node(state: AgentState):
-    contexts = retrieve_maintenance_context(state["signals"], state.get("maintenance_query", ""))
+    signals = state.get("signals", [])
+    contexts = retrieve_maintenance_context(signals, state.get("maintenance_query", ""))
     return {"contexts": contexts}
 
 
 def report_node(state: AgentState):
-    prediction = state["prediction"]
-    normalized_input = state["normalized_input"]
-    action_plan = build_action_plan(normalized_input, state["signals"], state["contexts"])
+    prediction = state.get("prediction", {})
+    normalized_input = state.get("normalized_input", {})
+    signals = state.get("signals", [])
+    contexts = state.get("contexts", [])
+
+    action_plan = build_action_plan(normalized_input, signals, contexts)
     action_plan = prioritize_action_plan(action_plan, state.get("maintenance_query", ""))
     service_outlook = build_service_outlook(
         normalized_input,
-        state["signals"],
-        prediction["risk_probability"],
+        signals,
+        float(prediction.get("risk_probability", 0.0)),
     )
     fleet_policy_checks = build_fleet_policy_checks(
         normalized_input,
-        state["signals"],
-        prediction["risk_probability"],
+        signals,
+        float(prediction.get("risk_probability", 0.0)),
     )
     query_response = build_query_response(
         state.get("maintenance_query", ""),
         action_plan,
-        prediction["risk_label"],
-        prediction["risk_probability"],
-        state["contexts"],
+        str(prediction.get("risk_label", "LOW")),
+        float(prediction.get("risk_probability", 0.0)),
+        contexts,
         state.get("parsed_query_facts", {}),
     )
 
     base_report = {
         "health_summary": {
             "vehicle_status": (
-                "Maintenance Required" if prediction["risk_prediction"] == 1 else "No Immediate Maintenance Needed"
+                "Maintenance Required" if int(prediction.get("risk_prediction", 0)) == 1 else "No Immediate Maintenance Needed"
             ),
-            "risk_level": prediction["risk_label"],
-            "risk_score": round(prediction["risk_probability"], 4),
-            "key_issues": [signal["issue"] for signal in state["signals"]] or ["no immediate critical issue"],
+            "risk_level": str(prediction.get("risk_label", "LOW")),
+            "risk_score": round(float(prediction.get("risk_probability", 0.0)), 4),
+            "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
         },
-        "risk_level": prediction["risk_label"],
-        "risk_score": round(prediction["risk_probability"], 4),
-        "risk_prediction": prediction["risk_prediction"],
-        "key_issues": [signal["issue"] for signal in state["signals"]] or ["no immediate critical issue"],
+        "risk_level": str(prediction.get("risk_label", "LOW")),
+        "risk_score": round(float(prediction.get("risk_probability", 0.0)), 4),
+        "risk_prediction": int(prediction.get("risk_prediction", 0)),
+        "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
         "maintenance_query": state.get("maintenance_query", ""),
         "parsed_query_facts": state.get("parsed_query_facts", {}),
         "retrieval_mode": get_retriever_mode(),
-        "retrieval_query": build_retrieval_query(state["signals"], state.get("maintenance_query", "")),
-        "retrieved_context": state["contexts"],
-        "sources": state["contexts"],
+        "retrieval_query": build_retrieval_query(signals, state.get("maintenance_query", "")),
+        "retrieved_context": contexts,
+        "sources": contexts,
         "query_response": query_response,
         "service_outlook": service_outlook,
         "fleet_policy_checks": fleet_policy_checks,
@@ -107,7 +113,7 @@ def report_node(state: AgentState):
             "when necessary and consult a certified technician or fleet supervisor before further use."
         ),
     }
-    result = maybe_enrich_with_llm(base_report, normalized_input, state["contexts"])
+    result = maybe_enrich_with_llm(base_report, normalized_input, contexts)
     return {"result": result}
 
 

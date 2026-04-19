@@ -276,16 +276,20 @@ input_data = build_input_form_grid(features, num_cols=2, use_sidebar=False)
 run_agent = st.button("🤖 Run Maintenance Agent", type="primary")
 
 if run_agent:
-    with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
-        input_data["maintenance_query"] = maintenance_query
-        agent_state = agent.invoke({"input_data": input_data})
-        report = agent_state["result"]
+    try:
+        with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
+            input_data["maintenance_query"] = maintenance_query
+            agent_state = agent.invoke({"input_data": input_data})
+            report = agent_state["result"]
 
-    st.markdown("---")
-    render_report(report)
-    if input_data.get("fault_code_count_unknown"):
-        st.warning(
-            "Fault code count was not provided, so the agent used a conservative estimate. "
-            "Provide the actual count if you have it for a more reliable report."
-        )
+        st.markdown("---")
+        render_report(report)
+        if input_data.get("fault_code_count_unknown"):
+            st.warning(
+                "Fault code count was not provided, so the agent used a conservative estimate. "
+                "Provide the actual count if you have it for a more reliable report."
+            )
+    except Exception as exc:
+        st.error("The maintenance agent could not complete this run. Please validate inputs and try again.")
+        st.caption(f"Technical detail: {exc}")
 

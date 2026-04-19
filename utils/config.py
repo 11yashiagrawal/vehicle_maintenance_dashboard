@@ -14,6 +14,18 @@ STYLE_CSS_FILENAME = "style.css"
 DEFAULT_OLLAMA_MODEL = "llama3.2:3b"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
+# Shared thresholds used by model scoring and agent rules.
+HIGH_RISK_THRESHOLD = 0.7
+MEDIUM_RISK_THRESHOLD = 0.4
+SERVICE_OUTLOOK_IMMEDIATE_THRESHOLD = 0.8
+SERVICE_OUTLOOK_SOON_THRESHOLD = 0.5
+SERVICE_OVERDUE_DAYS_THRESHOLD = 180
+FAULT_CODE_ALERT_THRESHOLD = 5
+
+# Limits for query-derived fallback values to avoid unrealistic overrides.
+QUERY_FAULT_CODE_BASELINE = 6.0
+QUERY_FAULT_CODE_MAX = 8.0
+
 CATEGORICAL_OPTIONS = {
     "vehicle_type": ["SUV", "Sedan", "Truck", "Van"],
     "fuel_type": ["Diesel", "Electric", "Petrol"],

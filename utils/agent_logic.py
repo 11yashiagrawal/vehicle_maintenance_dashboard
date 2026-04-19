@@ -1,12 +1,27 @@
 import json
+import logging
 import os
 import re
 from typing import Dict, List
 
-from utils.config import DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL
+from utils.config import (
+    DEFAULT_OLLAMA_BASE_URL,
+    DEFAULT_OLLAMA_MODEL,
+    FAULT_CODE_ALERT_THRESHOLD,
+    HIGH_RISK_THRESHOLD,
+    MEDIUM_RISK_THRESHOLD,
+    QUERY_FAULT_CODE_BASELINE,
+    QUERY_FAULT_CODE_MAX,
+    SERVICE_OUTLOOK_IMMEDIATE_THRESHOLD,
+    SERVICE_OUTLOOK_SOON_THRESHOLD,
+    SERVICE_OVERDUE_DAYS_THRESHOLD,
+)
 from utils.model_tool import predict_risk
 from utils.preprocessor import normalize_input_data
 from utils.retriever import get_retriever_mode, load_retriever
+
+
+logger = logging.getLogger(__name__)
 
 
 def validate_vehicle_input(input_data: Dict) -> Dict:
@@ -46,11 +61,20 @@ def parse_query_facts(maintenance_query: str) -> Dict:
     if "battery" in query or "not starting" in query or "won't start" in query or "wont start" in query:
         parsed["battery_voltage"] = min(float(parsed.get("battery_voltage", 15.0)), 11.2)
     if "fault" in query or "error code" in query or "warning code" in query:
-        parsed["fault_code_count"] = max(float(parsed.get("fault_code_count", 0.0)), 6.0)
+        parsed["fault_code_count"] = min(
+            QUERY_FAULT_CODE_MAX,
+            max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_BASELINE),
+        )
     if "overdue service" in query or "not serviced" in query or "service overdue" in query:
-        parsed["days_since_last_service"] = max(float(parsed.get("days_since_last_service", 0.0)), 190.0)
+        parsed["days_since_last_service"] = max(
+            float(parsed.get("days_since_last_service", 0.0)),
+            float(SERVICE_OVERDUE_DAYS_THRESHOLD + 10),
+        )
     if "not working" in query or "breakdown" in query:
-        parsed["fault_code_count"] = max(float(parsed.get("fault_code_count", 0.0)), 8.0)
+        parsed["fault_code_count"] = min(
+            QUERY_FAULT_CODE_MAX,
+            max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_MAX),
+        )
 
     return parsed
 
@@ -92,7 +116,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[st
             "query": "battery voltage degradation charging system",
         })
 
-    if input_data["fault_code_count"] > 5:
+    if input_data["fault_code_count"] > FAULT_CODE_ALERT_THRESHOLD:
         signals.append({
             "issue": "recurring fault activity",
             "reason": "A high number of active fault codes indicates subsystem instability.",
@@ -101,7 +125,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[st
             "query": "fault codes recurring faults diagnostics",
         })
 
-    if input_data["days_since_last_service"] > 180:
+    if input_data["days_since_last_service"] > SERVICE_OVERDUE_DAYS_THRESHOLD:
         signals.append({
             "issue": "service overdue",
             "reason": "The vehicle has exceeded the preventive maintenance window.",
@@ -119,7 +143,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[st
             "query": "load efficiency drivetrain stress fuel efficiency",
         })
 
-    if risk_score >= 0.7 and not signals:
+    if risk_score >= HIGH_RISK_THRESHOLD and not signals:
         signals.append({
             "issue": "high predicted maintenance risk",
             "reason": "The ML model predicts high failure risk even though no single threshold rule dominates.",
@@ -218,11 +242,11 @@ def prioritize_action_plan(action_plan: List[Dict[str, str]], maintenance_query:
 
 
 def build_service_outlook(input_data: Dict, signals: List[Dict[str, str]], risk_score: float) -> Dict[str, str]:
-    if risk_score >= 0.8:
+    if risk_score >= SERVICE_OUTLOOK_IMMEDIATE_THRESHOLD:
         inspection_window = "Immediate workshop intake"
         downtime_risk = "High"
         operating_advice = "Avoid long-haul or passenger-critical duty until inspection is completed."
-    elif risk_score >= 0.5:
+    elif risk_score >= SERVICE_OUTLOOK_SOON_THRESHOLD:
         inspection_window = "Within 48 hours"
         downtime_risk = "Moderate"
         operating_advice = "Allow restricted operations and monitor telemetry between trips."
@@ -271,7 +295,7 @@ def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], r
             ),
         })
 
-    if days_since_service > 180:
+    if days_since_service > SERVICE_OVERDUE_DAYS_THRESHOLD:
         checks.append({
             "title": "Preventive Maintenance SLA Breach",
             "status": "Critical",
@@ -289,7 +313,7 @@ def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], r
             ),
         })
 
-    if road_condition == "Highway" and risk_score >= 0.7:
+    if road_condition == "Highway" and risk_score >= HIGH_RISK_THRESHOLD:
         checks.append({
             "title": "Route Assignment Restriction",
             "status": "Attention",
@@ -298,7 +322,7 @@ def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], r
             ),
         })
 
-    if weather in {"Hot", "Cold"} and risk_score >= 0.5:
+    if weather in {"Hot", "Cold"} and risk_score >= MEDIUM_RISK_THRESHOLD:
         checks.append({
             "title": "Weather Sensitivity Alert",
             "status": "Monitor",
@@ -364,8 +388,14 @@ def build_query_response(
 
 
 def merge_report(base_report: Dict, enriched: Dict) -> Dict:
+    """Safely merge enriched report, validating action_plan and critical fields."""
     merged = dict(base_report)
     for key, value in enriched.items():
+        # Never overwrite action_plan with malformed data
+        if key == "action_plan":
+            if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+                logger.warning("Skipping malformed action_plan from enrichment.")
+                continue
         if isinstance(value, dict) and isinstance(base_report.get(key), dict):
             nested = dict(base_report[key])
             nested.update(value)
@@ -376,9 +406,13 @@ def merge_report(base_report: Dict, enriched: Dict) -> Dict:
 
 
 def maybe_enrich_with_llm(base_report: Dict, input_data: Dict, contexts: List[str]) -> Dict:
+    if os.getenv("ENABLE_OLLAMA_ENRICHMENT", "0") != "1":
+        return base_report
+
     try:
         from langchain_ollama import ChatOllama
     except Exception:
+        logger.debug("langchain_ollama not available; skipping LLM enrichment.")
         return base_report
 
     ollama_model = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
@@ -409,9 +443,17 @@ BASE_REPORT:
         response = llm.invoke(prompt)
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         enriched = json.loads(content)
-        if isinstance(enriched, dict) and "action_plan" in enriched:
+        if isinstance(enriched, dict):
+            # Validate action_plan shape before merging
+            ap = enriched.get("action_plan", [])
+            if "action_plan" in enriched:
+                if not (isinstance(ap, list) and all(isinstance(item, dict) for item in ap)):
+                    logger.warning("Enrichment action_plan failed shape validation; using base report.")
+                    return base_report
             return merge_report(base_report, enriched)
-    except Exception:
+    except Exception as exc:
+        logger.warning("LLM enrichment failed: %s", exc)
+        base_report["enrichment_status"] = "failed"
         return base_report
 
     return base_report

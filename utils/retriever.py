@@ -1,8 +1,18 @@
 import os
+import logging
 from functools import lru_cache
 from typing import List
 
 from langchain_core.documents import Document
+
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MAINTENANCE_SECTIONS = [
+    "Preventive maintenance baseline: check oil quality, cooling health, and brake condition every service cycle.",
+    "Fault management baseline: prioritize recurring fault codes and verify subsystem stability before clearing warnings.",
+    "Safety baseline: when overheating, severe vibration, or electrical instability is observed, reduce duty and inspect immediately.",
+]
 
 
 class KeywordRetriever:
@@ -37,23 +47,33 @@ def load_retriever():
         "maintenance_docs.txt",
     )
 
-    with open(file_path, "r", encoding="utf-8") as f:
-        text = f.read()
+    if not os.path.exists(file_path):
+        logger.warning("Maintenance docs not found at %s; using built-in fallback guidance.", file_path)
+        sections = DEFAULT_MAINTENANCE_SECTIONS
+    else:
+        with open(file_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        sections = [section.strip() for section in text.split("---") if section.strip()]
 
-    sections = [section.strip() for section in text.split("---") if section.strip()]
+    if not sections:
+        logger.warning("Maintenance docs are empty; using built-in fallback guidance.")
+        sections = DEFAULT_MAINTENANCE_SECTIONS
 
     use_vector_retriever = os.getenv("USE_VECTOR_RETRIEVER", "0") == "1"
 
     if use_vector_retriever:
-        from langchain_community.vectorstores import FAISS
-        from langchain_huggingface import HuggingFaceEmbeddings
+        try:
+            from langchain_community.vectorstores import FAISS
+            from langchain_huggingface import HuggingFaceEmbeddings
 
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"local_files_only": True},
-        )
-        vectorstore = FAISS.from_texts(sections, embeddings)
-        return vectorstore.as_retriever(search_kwargs={"k": 3})
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={"local_files_only": True},
+            )
+            vectorstore = FAISS.from_texts(sections, embeddings)
+            return vectorstore.as_retriever(search_kwargs={"k": 3})
+        except Exception as exc:
+            logger.warning("Vector retriever init failed; falling back to keyword retriever: %s", exc)
 
     return KeywordRetriever(sections, k=3)
 
