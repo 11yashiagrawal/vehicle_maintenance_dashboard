@@ -156,6 +156,10 @@ The smart maintenance agent:
 
 ## System Architecture
 
+The project implements a multi-layered architecture transitioning from raw telemetry data to agentic decision support. 
+
+For a detailed visual representation, see: **[System Architecture Diagram](./ARCHITECTURE.md)**
+
 The end-to-end pipeline follows this structured workflow:
 
 1. Raw Fleet Telemetry Data  
