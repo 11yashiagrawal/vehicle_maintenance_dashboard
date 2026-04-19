@@ -24,6 +24,13 @@ from utils.retriever import get_retriever_mode, load_retriever
 logger = logging.getLogger(__name__)
 
 
+MAINTENANCE_QUERY_PATTERN = re.compile(
+    r"\b(vehicle|truck|van|suv|sedan|engine|battery|service|maintenance|fault|code|overheat|"
+    r"vibration|brake|steering|diagnostic|oil|cooling|load|efficiency|inspection|repair)\b",
+    flags=re.IGNORECASE,
+)
+
+
 def _has_meaningful_value(value) -> bool:
     if value is None:
         return False
@@ -63,6 +70,13 @@ def detect_request_mode(input_data: Dict) -> str:
     if has_telemetry:
         return "input_only"
     return "empty"
+
+
+def is_maintenance_query_relevant(maintenance_query: str) -> bool:
+    query = str(maintenance_query or "").strip()
+    if not query:
+        return False
+    return bool(MAINTENANCE_QUERY_PATTERN.search(query))
 
 
 def _query_mentions_overdue_service(query: str) -> bool:
@@ -159,7 +173,39 @@ def parse_query_facts(maintenance_query: str) -> Dict:
 
 def merge_query_into_input(input_data: Dict, parsed_query_facts: Dict) -> Dict:
     merged = dict(input_data)
+
+    def has_user_value(field: str) -> bool:
+        value = input_data.get(field)
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip())
+        return True
+
     for key, value in parsed_query_facts.items():
+        # Respect explicit user telemetry first. Query facts are fallback hints.
+        if key == "days_since_last_service":
+            if has_user_value("days_since_last_service") or has_user_value("last_service_date"):
+                continue
+        if key == "fault_code_count":
+            if has_user_value("fault_code_count"):
+                continue
+        if key in {
+            "mileage_km",
+            "engine_hours",
+            "vehicle_age_years",
+            "oil_temp_avg_celsius",
+            "vibration_level",
+            "battery_voltage",
+            "engine_load_percent",
+            "fuel_efficiency_kmpl",
+            "vehicle_type",
+            "fuel_type",
+            "region",
+            "road_condition",
+            "weather_condition",
+        } and has_user_value(key):
+            continue
         merged[key] = value
     return merged
 
@@ -489,7 +535,7 @@ def build_query_response(
     contexts: List[str],
     parsed_query_facts: Dict,
 ) -> Dict:
-    if not maintenance_query.strip():
+    if not maintenance_query.strip() or not is_maintenance_query_relevant(maintenance_query):
         return {}
 
     prioritized_plan = prioritize_action_plan(action_plan, maintenance_query)
@@ -609,6 +655,7 @@ BASE_REPORT:
 def analyze_vehicle(input_data: Dict) -> Dict:
     request_mode = detect_request_mode(input_data)
     maintenance_query = extract_user_query(input_data)
+    query_is_relevant = is_maintenance_query_relevant(maintenance_query)
     parsed_query_facts = parse_query_facts(maintenance_query)
     merged_input = merge_query_into_input(input_data, parsed_query_facts)
     normalized_input = validate_vehicle_input(merged_input)
@@ -633,6 +680,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
 
     report = {
         "request_mode": request_mode,
+        "query_is_relevant": query_is_relevant,
         "health_summary": {
             "vehicle_status": (
                 "Maintenance Required" if prediction["risk_prediction"] == 1 else "No Immediate Maintenance Needed"
@@ -657,6 +705,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "decision_trace": {
             "request_mode": request_mode,
             "query_present": bool(maintenance_query.strip()),
+            "query_is_relevant": query_is_relevant,
             "telemetry_present": request_mode in {"input_only", "combined"},
             "parsed_query_facts": parsed_query_facts,
             "detected_signals": [signal["issue"] for signal in signals],

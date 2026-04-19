@@ -11,6 +11,7 @@ from utils.agent_logic import (
     detect_request_mode,
     extract_vehicle_signals,
     extract_user_query,
+    is_maintenance_query_relevant,
     merge_query_into_input,
     maybe_enrich_with_llm,
     parse_query_facts,
@@ -69,6 +70,7 @@ def report_node(state: AgentState):
     signals = state.get("signals", [])
     contexts = state.get("contexts", [])
     request_mode = detect_request_mode(state.get("input_data", {}))
+    query_is_relevant = is_maintenance_query_relevant(state.get("maintenance_query", ""))
 
     action_plan = build_action_plan(normalized_input, signals, contexts)
     action_plan = prioritize_action_plan(action_plan, state.get("maintenance_query", ""))
@@ -93,6 +95,7 @@ def report_node(state: AgentState):
 
     base_report = {
         "request_mode": request_mode,
+        "query_is_relevant": query_is_relevant,
         "health_summary": {
             "vehicle_status": (
                 "Maintenance Required" if int(prediction.get("risk_prediction", 0)) == 1 else "No Immediate Maintenance Needed"
@@ -118,6 +121,7 @@ def report_node(state: AgentState):
         "decision_trace": {
             "request_mode": request_mode,
             "query_present": bool(str(state.get("maintenance_query", "")).strip()),
+            "query_is_relevant": query_is_relevant,
             "telemetry_present": request_mode in {"input_only", "combined"},
             "parsed_query_facts": state.get("parsed_query_facts", {}),
             "detected_signals": [signal["issue"] for signal in signals],

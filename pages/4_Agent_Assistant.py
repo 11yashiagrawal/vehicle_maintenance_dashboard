@@ -2,6 +2,7 @@ import streamlit as st
 from datetime import date
 
 from utils.langgraph_agent import build_agent
+from utils.agent_logic import is_maintenance_query_relevant
 from utils.model_loader import load_artifacts
 from utils.preprocessor import build_input_form_grid
 from utils.config import INPUT_CATEGORICAL_FEATURES, INPUT_NUMERIC_FEATURES
@@ -380,7 +381,7 @@ def render_decision_trace(report: dict, submission_summary: dict | None = None) 
                 )
 
     if retrieval_query:
-        st.caption(f"Retrieval query used: {retrieval_query}")
+        st.caption("Retrieval query generated from detected maintenance signals.")
 
 
 def render_report(report: dict, submission_summary: dict | None = None) -> None:
@@ -390,7 +391,6 @@ def render_report(report: dict, submission_summary: dict | None = None) -> None:
     risk_level = str(health_summary.get("risk_level", report.get("risk_level", "UNKNOWN")))
     key_issues = health_summary.get("key_issues", report.get("key_issues", []))
     maintenance_query = report.get("maintenance_query", "")
-    query_response = report.get("query_response", {})
     parsed_query_facts = report.get("parsed_query_facts", {})
     policy_checks = report.get("fleet_policy_checks", [])
     submission_summary = submission_summary or {}
@@ -415,11 +415,7 @@ def render_report(report: dict, submission_summary: dict | None = None) -> None:
     with col3:
         st.metric("Risk Level", risk_level.title())
 
-    if maintenance_query:
-        st.markdown("### 💬 Maintenance Query")
-        st.info(maintenance_query)
-        render_query_response(query_response)
-    elif parsed_query_facts:
+    if parsed_query_facts:
         st.caption("Parsed query facts were applied to this report.")
 
     render_decision_trace(report, submission_summary=submission_summary)
@@ -477,6 +473,18 @@ if run_agent:
         with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
             input_data["maintenance_query"] = maintenance_query
             submission_summary = summarize_submission(input_data, maintenance_query)
+
+            if (
+                submission_summary.get("request_mode") == "Query Only"
+                and maintenance_query.strip()
+                and not is_maintenance_query_relevant(maintenance_query)
+            ):
+                st.warning(
+                    "This query looks unrelated to vehicle maintenance. "
+                    "Please enter a maintenance-specific query or provide telemetry inputs."
+                )
+                st.stop()
+
             # Defensive normalization: prevent blank date strings from crashing downstream date parsing.
             if str(input_data.get("last_service_date", "")).strip() == "":
                 input_data["last_service_date"] = date.today().isoformat()
