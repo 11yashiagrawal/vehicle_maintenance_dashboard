@@ -156,7 +156,14 @@ def calculate_internal_features(input_data: Dict[str, Any]) -> Dict[str, Any]:
     else:
         service_date = data.get("last_service_date", date.today())
         if isinstance(service_date, str):
-            service_date = date.fromisoformat(service_date)
+            service_text = service_date.strip()
+            if service_text:
+                try:
+                    service_date = date.fromisoformat(service_text)
+                except ValueError:
+                    service_date = date.today()
+            else:
+                service_date = date.today()
 
         delta = date.today() - service_date
         data["days_since_last_service"] = max(0, delta.days)
@@ -186,11 +193,13 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
         value = input_data.get(feature, options[0])
         normalized[feature] = value if value in options else options[0]
 
-    if "days_since_last_service" in input_data and input_data["days_since_last_service"] is not None:
-        normalized["days_since_last_service"] = max(0, int(float(input_data["days_since_last_service"])))
+    parsed_days_since_service = _parse_optional_float(input_data.get("days_since_last_service"))
+    if parsed_days_since_service is not None:
+        normalized["days_since_last_service"] = max(0, int(parsed_days_since_service))
     else:
         service_date = input_data.get("last_service_date", date.today())
         if isinstance(service_date, str):
+            service_date = service_date.strip()
             try:
                 service_date = date.fromisoformat(service_date)
             except ValueError:
