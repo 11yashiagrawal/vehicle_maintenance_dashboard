@@ -24,21 +24,24 @@ def _get_feature_label(feature: str) -> str:
     meta = NUMERIC_FEATURE_META.get(feature, {})
     return meta.get("label", feature.replace("_", " ").title())
 
-def _default_value(feature_name: str) -> float:
-    fname = feature_name.lower()
-    if "mileage" in fname: return 50_000.0
-    if "age" in fname: return 5.0
-    if "hours" in fname: return 1_000.0
-    if "percent" in fname: return 50.0
-    return 0.0
+def _default_numeric_fallback(feature: str) -> float:
+    meta = NUMERIC_FEATURE_META.get(feature, {})
+    min_value = float(meta.get("min_value", 0.0))
+    max_value = float(meta.get("max_value", min_value))
+    return (min_value + max_value) / 2.0
 
-def _default_step(feature_name: str) -> float:
-    fname = feature_name.lower()
-    if "mileage" in fname: return 1_000.0
-    if "age" in fname: return 1.0
-    if "hours" in fname: return 100.0
-    if "percent" in fname: return 1.0
-    return 0.1
+def _parse_optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        value = stripped
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 def _estimate_fault_code_count(data: Dict[str, Any]) -> float:
     """Estimate a conservative fault-code count when the user does not know it."""
@@ -87,11 +90,11 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
             if feature == "days_since_last_service":
                 col = cols[idx % num_cols]
                 with col:
-                    input_data["last_service_date"] = st.date_input(
+                    input_data["last_service_date"] = st.text_input(
                         "Last Service Date",
-                        value=date.today(),
-                        max_value=date.today(),
-                        help="The date of the most recent maintenance service. Future dates are invalid."
+                        value="",
+                        placeholder="YYYY-MM-DD (optional)",
+                        help="Optional. Leave blank if unknown. Use YYYY-MM-DD format."
                     )
             continue
             
@@ -100,12 +103,10 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
         with col:
             if feature == "fault_code_count":
                 input_data["fault_code_count_unknown"] = fault_code_unknown
-            input_data[feature] = col.number_input(
+            input_data[feature] = col.text_input(
                 _get_feature_label(feature),
-                value=float(_default_value(feature)),
-                min_value=float(meta.get("min_value", 0.0)),
-                max_value=float(meta.get("max_value", 1000000.0)),
-                step=float(_default_step(feature)),
+                value="",
+                placeholder=meta.get("range_hint", "Enter a value"),
                 disabled=fault_code_unknown if feature == "fault_code_count" else False,
                 help=(
                     "Leave this at zero only if there are truly no active codes. "
@@ -122,7 +123,12 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     for idx, (cat_feature, options) in enumerate(CATEGORICAL_OPTIONS.items()):
         col = cat_cols[idx % len(cat_cols)]
         with col:
-            input_data[cat_feature] = col.selectbox(_get_feature_label(cat_feature), options)
+            input_data[cat_feature] = col.selectbox(
+                _get_feature_label(cat_feature),
+                options,
+                index=None,
+                placeholder="Select an option",
+            )
 
     return input_data
 
@@ -169,8 +175,11 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = {}
 
     for feature in INPUT_NUMERIC_FEATURES:
-        raw_value = float(input_data.get(feature, 0.0) or 0.0)
-        normalized[feature] = _clamp_numeric(feature, raw_value)
+        parsed_value = _parse_optional_float(input_data.get(feature))
+        if parsed_value is None:
+            normalized[feature] = _default_numeric_fallback(feature)
+        else:
+            normalized[feature] = _clamp_numeric(feature, parsed_value)
 
     for feature in INPUT_CATEGORICAL_FEATURES:
         options = CATEGORICAL_OPTIONS[feature]
@@ -189,8 +198,8 @@ def normalize_input_data(input_data: Dict[str, Any]) -> Dict[str, Any]:
         normalized["last_service_date"] = service_date
 
     fault_code_unknown = bool(input_data.get("fault_code_count_unknown", False))
-    raw_fault_code_count = input_data.get("fault_code_count")
-    if raw_fault_code_count is None or raw_fault_code_count == "":
+    raw_fault_code_count = _parse_optional_float(input_data.get("fault_code_count"))
+    if raw_fault_code_count is None:
         normalized["fault_code_count"] = _estimate_fault_code_count(normalized)
         normalized["fault_code_count_source"] = "estimated"
     elif fault_code_unknown:

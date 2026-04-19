@@ -54,22 +54,38 @@ def parse_query_facts(maintenance_query: str) -> Dict:
             parsed["vehicle_type"] = label
             break
 
-    if "overheat" in query or "hot engine" in query:
+    weather_patterns = {
+        "hot": "Hot",
+        "heatwave": "Hot",
+        "cold": "Cold",
+        "rain": "Rainy",
+        "rainy": "Rainy",
+    }
+    for token, label in weather_patterns.items():
+        if token in query:
+            parsed["weather_condition"] = label
+            break
+
+    if any(token in query for token in ["overheat", "hot engine", "high temp", "temperature high", "engine hot"]):
         parsed["oil_temp_avg_celsius"] = max(float(parsed.get("oil_temp_avg_celsius", 0.0)), 115.0)
-    if "vibration" in query or "vibrating" in query or "shake" in query:
+    if any(token in query for token in ["vibration", "vibrating", "shake", "shaking", "rattle", "noise"]):
         parsed["vibration_level"] = max(float(parsed.get("vibration_level", 0.0)), 8.0)
-    if "battery" in query or "not starting" in query or "won't start" in query or "wont start" in query:
+    if any(token in query for token in ["battery", "not starting", "won't start", "wont start", "dead battery", "starting issue"]):
         parsed["battery_voltage"] = min(float(parsed.get("battery_voltage", 15.0)), 11.2)
-    if "fault" in query or "error code" in query or "warning code" in query:
+    if any(token in query for token in ["fault", "error code", "warning code", "dtc", "diagnostic code"]):
         parsed["fault_code_count"] = min(
             QUERY_FAULT_CODE_MAX,
             max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_BASELINE),
         )
-    if "overdue service" in query or "not serviced" in query or "service overdue" in query:
+    if any(token in query for token in ["overdue service", "not serviced", "service overdue", "missed service", "service delay"]):
         parsed["days_since_last_service"] = max(
             float(parsed.get("days_since_last_service", 0.0)),
             float(SERVICE_OVERDUE_DAYS_THRESHOLD + 10),
         )
+    if any(token in query for token in ["high load", "heavy load", "overloaded"]):
+        parsed["engine_load_percent"] = max(float(parsed.get("engine_load_percent", 0.0)), 90.0)
+    if any(token in query for token in ["low mileage", "poor mileage", "fuel efficiency low", "fuel consumption high"]):
+        parsed["fuel_efficiency_kmpl"] = min(float(parsed.get("fuel_efficiency_kmpl", 40.0)), 8.0)
     if "not working" in query or "breakdown" in query:
         parsed["fault_code_count"] = min(
             QUERY_FAULT_CODE_MAX,
@@ -86,8 +102,12 @@ def merge_query_into_input(input_data: Dict, parsed_query_facts: Dict) -> Dict:
     return merged
 
 
-def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[str, str]]:
+def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_query: str = "") -> List[Dict[str, str]]:
     signals: List[Dict[str, str]] = []
+    query = maintenance_query.lower().strip()
+
+    def has_issue(text: str) -> bool:
+        return any(text in existing["issue"] for existing in signals)
 
     if input_data["oil_temp_avg_celsius"] > 110:
         signals.append({
@@ -142,6 +162,71 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float) -> List[Dict[st
             "timeline": "Inspect in next maintenance cycle",
             "query": "load efficiency drivetrain stress fuel efficiency",
         })
+
+    # If telemetry is missing or neutral, infer likely checks from user-described symptoms.
+    if query:
+        if any(token in query for token in ["overheat", "hot engine", "high temp", "temperature high", "engine hot"]) and not has_issue("overheating"):
+            signals.append({
+                "issue": "engine overheating risk",
+                "reason": "The maintenance query describes overheating symptoms that require cooling-system checks.",
+                "priority": "High",
+                "timeline": "Inspect immediately",
+                "query": "overheating thermal stress engine load",
+            })
+
+        if any(token in query for token in ["vibration", "shake", "shaking", "rattle", "noise"]) and not has_issue("vibration"):
+            signals.append({
+                "issue": "abnormal vibration",
+                "reason": "The query mentions vibration/noise symptoms commonly linked to rotating or mounting components.",
+                "priority": "High",
+                "timeline": "Inspect within 24 hours",
+                "query": "vibration mechanical imbalance worn components",
+            })
+
+        if any(token in query for token in ["battery", "not starting", "won't start", "wont start", "dead battery"]) and not has_issue("battery"):
+            signals.append({
+                "issue": "battery degradation",
+                "reason": "The query indicates starting/electrical weakness, so battery and charging checks should be prioritized.",
+                "priority": "Medium",
+                "timeline": "Test battery today",
+                "query": "battery voltage degradation charging system",
+            })
+
+        if any(token in query for token in ["fault", "error code", "warning code", "dtc", "diagnostic code"]) and not has_issue("fault"):
+            signals.append({
+                "issue": "recurring fault activity",
+                "reason": "The query references fault/diagnostic codes, suggesting unresolved subsystem alerts.",
+                "priority": "High",
+                "timeline": "Run diagnostics this shift",
+                "query": "fault codes recurring faults diagnostics",
+            })
+
+        if any(token in query for token in ["overdue service", "not serviced", "service overdue", "missed service", "service delay"]) and not has_issue("service overdue"):
+            signals.append({
+                "issue": "service overdue",
+                "reason": "The query indicates delayed preventive maintenance and elevated wear risk.",
+                "priority": "Medium",
+                "timeline": "Schedule service this week",
+                "query": "maintenance overdue preventive maintenance service interval",
+            })
+
+        if any(token in query for token in ["brake", "braking", "stopping distance"]) and not has_issue("brake"):
+            signals.append({
+                "issue": "brake system concern",
+                "reason": "The query mentions braking behavior; safety checks on brake pads, fluid, and hydraulics are required.",
+                "priority": "High",
+                "timeline": "Inspect immediately",
+                "query": "brake inspection stopping distance hydraulic leak",
+            })
+
+        if any(token in query for token in ["steering", "pulling", "alignment"]) and not has_issue("steering"):
+            signals.append({
+                "issue": "steering or alignment concern",
+                "reason": "The query suggests steering/alignment symptoms that may affect handling safety.",
+                "priority": "Medium",
+                "timeline": "Inspect within 24 hours",
+                "query": "steering alignment suspension handling",
+            })
 
     if risk_score >= HIGH_RISK_THRESHOLD and not signals:
         signals.append({
@@ -468,7 +553,7 @@ def analyze_vehicle(input_data: Dict) -> Dict:
     risk_score = prediction["risk_probability"]
     risk_label = prediction["risk_label"]
 
-    signals = extract_vehicle_signals(normalized_input, risk_score)
+    signals = extract_vehicle_signals(normalized_input, risk_score, maintenance_query)
     contexts = retrieve_maintenance_context(signals, maintenance_query)
     action_plan = build_action_plan(normalized_input, signals, contexts)
     action_plan = prioritize_action_plan(action_plan, maintenance_query)

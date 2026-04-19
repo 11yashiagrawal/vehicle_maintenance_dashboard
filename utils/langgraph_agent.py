@@ -48,7 +48,11 @@ def validate_node(state: AgentState):
 def score_node(state: AgentState):
     normalized_input = state.get("normalized_input", {})
     prediction = predict_risk(normalized_input)
-    signals = extract_vehicle_signals(normalized_input, prediction["risk_probability"])
+    signals = extract_vehicle_signals(
+        normalized_input,
+        prediction["risk_probability"],
+        state.get("maintenance_query", ""),
+    )
     return {"prediction": prediction, "signals": signals}
 
 
