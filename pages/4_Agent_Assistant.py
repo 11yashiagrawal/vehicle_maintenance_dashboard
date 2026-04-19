@@ -4,6 +4,7 @@ from datetime import date
 from utils.langgraph_agent import build_agent
 from utils.model_loader import load_artifacts
 from utils.preprocessor import build_input_form_grid
+from utils.config import INPUT_CATEGORICAL_FEATURES, INPUT_NUMERIC_FEATURES
 from utils.ui_utils import apply_full_page_background, inject_custom_css
 
 
@@ -177,6 +178,38 @@ def load_agent():
     return build_agent()
 
 
+def _has_meaningful_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def summarize_submission(input_data: dict, maintenance_query: str) -> dict:
+    telemetry_fields = list(INPUT_NUMERIC_FEATURES) + list(INPUT_CATEGORICAL_FEATURES) + ["last_service_date"]
+    filled_telemetry = [field for field in telemetry_fields if _has_meaningful_value(input_data.get(field))]
+
+    has_query = bool(maintenance_query.strip())
+    has_telemetry = bool(filled_telemetry)
+    if has_query and has_telemetry:
+        request_mode = "Combined"
+    elif has_query:
+        request_mode = "Query Only"
+    elif has_telemetry:
+        request_mode = "Input Only"
+    else:
+        request_mode = "Empty"
+
+    return {
+        "request_mode": request_mode,
+        "query_present": has_query,
+        "telemetry_present": has_telemetry,
+        "filled_telemetry_count": len(filled_telemetry),
+        "filled_telemetry_fields": filled_telemetry,
+    }
+
+
 def render_issue_chips(issues: list[str]) -> None:
     chips = "".join(
         f"<span class='agent-chip'>{issue.replace('_', ' ').title()}</span>"
@@ -257,14 +290,23 @@ def render_query_response(query_response: dict) -> None:
         st.markdown(" | ".join(pretty_facts))
 
 
-def render_decision_trace(report: dict) -> None:
+def render_decision_trace(report: dict, submission_summary: dict | None = None) -> None:
     trace = report.get("decision_trace", {}) or {}
-    request_mode = str(report.get("request_mode", trace.get("request_mode", "unknown"))).replace("_", " ").title()
+    submission_summary = submission_summary or {}
+    request_mode = str(
+        submission_summary.get(
+            "request_mode",
+            report.get("request_mode", trace.get("request_mode", "unknown")),
+        )
+    ).replace("_", " ").title()
     parsed_facts = trace.get("parsed_query_facts", {}) or {}
     detected_signals = trace.get("detected_signals", []) or []
     retrieval_query = trace.get("retrieval_query", "")
     retrieval_mode = trace.get("retrieval_mode", "KEYWORD")
     top_recommendation = trace.get("top_recommendation", "Preventive Monitoring")
+    query_present = bool(submission_summary.get("query_present", trace.get("query_present")))
+    telemetry_present = bool(submission_summary.get("telemetry_present", trace.get("telemetry_present")))
+    telemetry_count = int(submission_summary.get("filled_telemetry_count", 0))
 
     st.markdown("### 🧭 Decision Trace")
     st.markdown(
@@ -273,8 +315,9 @@ def render_decision_trace(report: dict) -> None:
             <div class="why-title">How the agent formed this answer</div>
             <div>The run mode was <span class="mode-pill">{request_mode}</span>.</div>
             <ul class="why-list">
-                <li>Query clues were parsed into maintenance facts before scoring.</li>
-                <li>Telemetry values were normalized and scored by the model.</li>
+                <li>Query clues were parsed into maintenance facts before scoring: <strong>{'Yes' if query_present else 'No'}</strong>.</li>
+                <li>Telemetry values were normalized and scored by the model: <strong>{'Yes' if telemetry_present else 'No'}</strong>.</li>
+                <li>Filled telemetry fields: <strong>{telemetry_count}</strong>.</li>
                 <li>Local retrieval mode: <strong>{retrieval_mode}</strong>.</li>
                 <li>Top recommendation: <strong>{top_recommendation}</strong>.</li>
             </ul>
@@ -289,7 +332,7 @@ def render_decision_trace(report: dict) -> None:
             f"""
             <div class="trace-card">
                 <div class="trace-label">Query Parsed</div>
-                <div class="trace-value">{'Yes' if trace.get('query_present') else 'No'}</div>
+                <div class="trace-value">{'Yes' if query_present else 'No'}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -299,7 +342,7 @@ def render_decision_trace(report: dict) -> None:
             f"""
             <div class="trace-card">
                 <div class="trace-label">Telemetry Used</div>
-                <div class="trace-value">{'Yes' if trace.get('telemetry_present') else 'No'}</div>
+                <div class="trace-value">{'Yes' if telemetry_present else 'No'}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -335,7 +378,7 @@ def render_decision_trace(report: dict) -> None:
         st.caption(f"Retrieval query used: {retrieval_query}")
 
 
-def render_report(report: dict) -> None:
+def render_report(report: dict, submission_summary: dict | None = None) -> None:
     health_summary = report.get("health_summary", {})
     risk_prediction = report.get("risk_prediction", 0)
     risk_score = float(health_summary.get("risk_score", report.get("risk_score", 0.0)))
@@ -345,7 +388,13 @@ def render_report(report: dict) -> None:
     query_response = report.get("query_response", {})
     parsed_query_facts = report.get("parsed_query_facts", {})
     policy_checks = report.get("fleet_policy_checks", [])
-    request_mode = str(report.get("request_mode", "unknown")).replace("_", " ").title()
+    submission_summary = submission_summary or {}
+    request_mode = str(
+        submission_summary.get(
+            "request_mode",
+            report.get("request_mode", "unknown"),
+        )
+    ).replace("_", " ").title()
 
     st.markdown(f"### 🚦 Agent Summary <span class='mode-pill'>{request_mode}</span>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1.2, 1, 1])
@@ -368,7 +417,7 @@ def render_report(report: dict) -> None:
     elif parsed_query_facts:
         st.caption("Parsed query facts were applied to this report.")
 
-    render_decision_trace(report)
+    render_decision_trace(report, submission_summary=submission_summary)
 
     st.markdown("### 🔍 Detected Issues")
     render_issue_chips(key_issues)
@@ -422,6 +471,7 @@ if run_agent:
     try:
         with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
             input_data["maintenance_query"] = maintenance_query
+            submission_summary = summarize_submission(input_data, maintenance_query)
             # Defensive normalization: prevent blank date strings from crashing downstream date parsing.
             if str(input_data.get("last_service_date", "")).strip() == "":
                 input_data["last_service_date"] = date.today().isoformat()
@@ -430,7 +480,7 @@ if run_agent:
             report = agent_state["result"]
 
         st.markdown("---")
-        render_report(report)
+        render_report(report, submission_summary=submission_summary)
         if input_data.get("fault_code_count_unknown"):
             st.warning(
                 "Fault code count was not provided, so the agent used a conservative estimate. "
@@ -441,11 +491,12 @@ if run_agent:
         try:
             fallback_input = dict(input_data)
             fallback_input["last_service_date"] = date.today().isoformat()
+            submission_summary = summarize_submission(fallback_input, maintenance_query)
             agent_state = agent.invoke({"input_data": fallback_input})
             report = agent_state["result"]
             st.info("Recovered from an input parsing issue by applying safe defaults for optional fields.")
             st.markdown("---")
-            render_report(report)
+            render_report(report, submission_summary=submission_summary)
         except Exception:
             st.error("The maintenance agent could not complete this run. Please validate inputs and try again.")
             st.caption(f"Technical detail: {exc}")
