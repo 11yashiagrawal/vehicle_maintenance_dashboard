@@ -1,4 +1,5 @@
 import streamlit as st
+from datetime import date
 
 from utils.langgraph_agent import build_agent
 from utils.model_loader import load_artifacts
@@ -279,6 +280,10 @@ if run_agent:
     try:
         with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
             input_data["maintenance_query"] = maintenance_query
+            # Defensive normalization: prevent blank date strings from crashing downstream date parsing.
+            if str(input_data.get("last_service_date", "")).strip() == "":
+                input_data["last_service_date"] = date.today().isoformat()
+
             agent_state = agent.invoke({"input_data": input_data})
             report = agent_state["result"]
 
@@ -290,6 +295,16 @@ if run_agent:
                 "Provide the actual count if you have it for a more reliable report."
             )
     except Exception as exc:
-        st.error("The maintenance agent could not complete this run. Please validate inputs and try again.")
-        st.caption(f"Technical detail: {exc}")
+        # One retry path for stale sessions that may still hold old parser behavior.
+        try:
+            fallback_input = dict(input_data)
+            fallback_input["last_service_date"] = date.today().isoformat()
+            agent_state = agent.invoke({"input_data": fallback_input})
+            report = agent_state["result"]
+            st.info("Recovered from an input parsing issue by applying safe defaults for optional fields.")
+            st.markdown("---")
+            render_report(report)
+        except Exception:
+            st.error("The maintenance agent could not complete this run. Please validate inputs and try again.")
+            st.caption(f"Technical detail: {exc}")
 
