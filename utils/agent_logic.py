@@ -9,6 +9,8 @@ from utils.config import (
     DEFAULT_OLLAMA_MODEL,
     FAULT_CODE_ALERT_THRESHOLD,
     HIGH_RISK_THRESHOLD,
+    INPUT_CATEGORICAL_FEATURES,
+    INPUT_NUMERIC_FEATURES,
     MEDIUM_RISK_THRESHOLD,
     QUERY_FAULT_CODE_BASELINE,
     QUERY_FAULT_CODE_MAX,
@@ -43,24 +45,7 @@ def _has_meaningful_value(value) -> bool:
 
 def detect_request_mode(input_data: Dict) -> str:
     has_query = _has_meaningful_value(input_data.get("maintenance_query"))
-    telemetry_keys = [
-        "mileage_km",
-        "engine_hours",
-        "vehicle_age_years",
-        "fault_code_count",
-        "oil_temp_avg_celsius",
-        "vibration_level",
-        "battery_voltage",
-        "engine_load_percent",
-        "fuel_efficiency_kmpl",
-        "days_since_last_service",
-        "last_service_date",
-        "vehicle_type",
-        "fuel_type",
-        "region",
-        "road_condition",
-        "weather_condition",
-    ]
+    telemetry_keys = list(INPUT_NUMERIC_FEATURES) + list(INPUT_CATEGORICAL_FEATURES) + ["last_service_date"]
     has_telemetry = any(_has_meaningful_value(input_data.get(key)) for key in telemetry_keys)
 
     if has_query and has_telemetry:

@@ -99,18 +99,6 @@ div.stButton > button[kind="primary"] * {
     margin-top: 1.1rem;
 }
 
-.answer-card {
-    background: rgba(8, 25, 32, 0.88);
-    border: 1px solid rgba(0, 255, 255, 0.2);
-    border-radius: 18px;
-    padding: 1rem 1.1rem;
-    margin: 1rem 0 1.2rem;
-}
-
-.answer-card h3 {
-    margin-top: 0;
-}
-
 .trace-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -249,45 +237,6 @@ def render_policy_checks(policy_checks: list[dict]) -> None:
             """,
             unsafe_allow_html=True,
         )
-
-
-def render_query_response(query_response: dict) -> None:
-    if not query_response:
-        return
-
-    st.subheader("💬 Answer To Your Query")
-    st.markdown(
-        f"""
-        <div class="answer-card">
-            <h3>{query_response.get("short_answer", "No answer generated.")}</h3>
-            <p><strong>Recommended focus:</strong> {query_response.get("recommended_focus", "General inspection")}</p>
-            <p><strong>Risk context:</strong> {query_response.get("risk_context", "Unknown")}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    steps = query_response.get("immediate_steps", [])
-    if steps:
-        st.markdown("#### Recommended Next Steps")
-        for idx, step in enumerate(steps, start=1):
-            st.markdown(
-                f"{idx}. {step.get('step', 'Inspect the vehicle.')} "
-                f"(`{step.get('priority', 'Unknown')}`, `{step.get('timeline', 'Not specified')}`)"
-            )
-
-    evidence = query_response.get("evidence_used", [])
-    if evidence:
-        st.caption("Guided by: " + " | ".join(evidence))
-
-    parsed_facts = query_response.get("parsed_facts", {})
-    if parsed_facts:
-        st.markdown("#### Parsed From Query")
-        pretty_facts = []
-        for key, value in parsed_facts.items():
-            label = key.replace("_", " ").title()
-            pretty_facts.append(f"**{label}:** {value}")
-        st.markdown(" | ".join(pretty_facts))
 
 
 def render_decision_trace(report: dict, submission_summary: dict | None = None) -> None:
