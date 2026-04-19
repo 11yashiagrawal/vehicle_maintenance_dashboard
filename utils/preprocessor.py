@@ -14,6 +14,9 @@ from utils.config import (
 )
 
 
+SHARED_INPUT_PREFIX = "shared_vehicle_input__"
+
+
 def _clamp_numeric(feature: str, value: float) -> float:
     meta = NUMERIC_FEATURE_META.get(feature, {})
     min_value = float(meta.get("min_value", -1_000_000_000.0))
@@ -63,6 +66,16 @@ def _parse_optional_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
 
+
+def _shared_widget_key(field_name: str) -> str:
+    return f"{SHARED_INPUT_PREFIX}{field_name}"
+
+
+def _init_widget_state(field_name: str, default_value: Any) -> None:
+    key = _shared_widget_key(field_name)
+    if key not in st.session_state:
+        st.session_state[key] = default_value
+
 def _estimate_fault_code_count(data: Dict[str, Any]) -> float:
     """Estimate a conservative fault-code count when the user does not know it."""
     score = 0.0
@@ -97,8 +110,10 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     ui.header("🔧 Vehicle Diagnostics")
     num_cols = max(1, num_cols)
     cols = ui.columns(num_cols)
+    _init_widget_state("fault_code_count_unknown", False)
     fault_code_unknown = ui.checkbox(
         "I do not know the fault code count",
+        key=_shared_widget_key("fault_code_count_unknown"),
         help="If selected, the app will use a conservative estimate instead of treating the value as zero.",
     )
 
@@ -110,9 +125,10 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
             if feature == "days_since_last_service":
                 col = cols[idx % num_cols]
                 with col:
+                    _init_widget_state("last_service_date", "")
                     input_data["last_service_date"] = st.text_input(
                         "Last Service Date",
-                        value="",
+                        key=_shared_widget_key("last_service_date"),
                         placeholder="YYYY-MM-DD (optional)",
                         help="Optional. Leave blank if unknown. Use YYYY-MM-DD format."
                     )
@@ -123,9 +139,10 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
         with col:
             if feature == "fault_code_count":
                 input_data["fault_code_count_unknown"] = fault_code_unknown
+            _init_widget_state(feature, "")
             input_data[feature] = col.text_input(
                 _get_feature_label(feature),
-                value="",
+                key=_shared_widget_key(feature),
                 placeholder=meta.get("range_hint", "Enter a value"),
                 disabled=fault_code_unknown if feature == "fault_code_count" else False,
                 help=(
@@ -143,10 +160,14 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     for idx, (cat_feature, options) in enumerate(CATEGORICAL_OPTIONS.items()):
         col = cat_cols[idx % len(cat_cols)]
         with col:
+            _init_widget_state(cat_feature, None)
+            if st.session_state.get(_shared_widget_key(cat_feature)) == "":
+                st.session_state[_shared_widget_key(cat_feature)] = None
             input_data[cat_feature] = col.selectbox(
                 _get_feature_label(cat_feature),
                 options,
                 index=None,
+                key=_shared_widget_key(cat_feature),
                 placeholder="Select an option",
             )
 
