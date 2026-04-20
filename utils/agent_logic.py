@@ -92,66 +92,89 @@ def extract_user_query(input_data: Dict) -> str:
 
 
 def parse_query_facts(maintenance_query: str) -> Dict:
+    """
+    Extract structured facts from a free-text maintenance query.
+
+    Each inferred value is accompanied by an explanation stored in
+    `_inference_log` so callers can surface the reasoning chain in
+    decision_trace for transparency (Fix 4).
+    """
     query = maintenance_query.lower().strip()
     if not query:
         return {}
 
     parsed: Dict[str, object] = {}
+    inference_log: List[str] = []
 
     age_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:year|years|yr|yrs)\b", query)
     if age_match:
         parsed["vehicle_age_years"] = float(age_match.group(1))
+        inference_log.append(
+            f"Inferred vehicle_age_years={age_match.group(1)} from '{age_match.group(0)}' in query."
+        )
 
-    vehicle_patterns = {
-        "truck": "Truck",
-        "van": "Van",
-        "suv": "SUV",
-        "sedan": "Sedan",
-    }
+    vehicle_patterns = {"truck": "Truck", "van": "Van", "suv": "SUV", "sedan": "Sedan"}
     for token, label in vehicle_patterns.items():
         if token in query:
             parsed["vehicle_type"] = label
+            inference_log.append(f"Inferred vehicle_type='{label}' from keyword '{token}' in query.")
             break
 
-    weather_patterns = {
-        "hot": "Hot",
-        "heatwave": "Hot",
-        "cold": "Cold",
-        "rain": "Rainy",
-        "rainy": "Rainy",
-    }
+    weather_patterns = {"hot": "Hot", "heatwave": "Hot", "cold": "Cold", "rain": "Rainy", "rainy": "Rainy"}
     for token, label in weather_patterns.items():
         if token in query:
             parsed["weather_condition"] = label
+            inference_log.append(f"Inferred weather_condition='{label}' from keyword '{token}' in query.")
             break
 
     if any(token in query for token in ["overheat", "hot engine", "high temp", "temperature high", "engine hot"]):
         parsed["oil_temp_avg_celsius"] = max(float(parsed.get("oil_temp_avg_celsius", 0.0)), 115.0)
+        inference_log.append(
+            "Set oil_temp_avg_celsius=115.0 (above 110C threshold) because query describes overheating symptoms."
+        )
     if any(token in query for token in ["vibration", "vibrating", "shake", "shaking", "rattle", "noise"]):
         parsed["vibration_level"] = max(float(parsed.get("vibration_level", 0.0)), 8.0)
+        inference_log.append(
+            "Set vibration_level=8.0 (above 7.0 threshold) because query describes vibration/noise symptoms."
+        )
     if any(token in query for token in ["battery", "not starting", "won't start", "wont start", "dead battery", "starting issue"]):
         parsed["battery_voltage"] = min(float(parsed.get("battery_voltage", 15.0)), 11.2)
+        inference_log.append(
+            "Set battery_voltage=11.2 (below 11.5V threshold) because query describes starting/electrical weakness."
+        )
     if _query_mentions_fault_codes(query):
         parsed["fault_code_count"] = min(
             QUERY_FAULT_CODE_MAX,
             max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_BASELINE),
         )
-    if _query_mentions_overdue_service(query) or any(
-        token in query for token in ["not serviced", "service delay"]
-    ):
+        inference_log.append(
+            f"Set fault_code_count={parsed['fault_code_count']} (above alert threshold) because query mentions fault/diagnostic codes."
+        )
+    if _query_mentions_overdue_service(query) or any(token in query for token in ["not serviced", "service delay"]):
         parsed["days_since_last_service"] = max(
             float(parsed.get("days_since_last_service", 0.0)),
             float(SERVICE_OVERDUE_DAYS_THRESHOLD + 10),
         )
+        inference_log.append(
+            f"Set days_since_last_service={parsed['days_since_last_service']} (overdue proxy) because query mentions delayed/missed service."
+        )
     if any(token in query for token in ["high load", "heavy load", "overloaded"]):
         parsed["engine_load_percent"] = max(float(parsed.get("engine_load_percent", 0.0)), 90.0)
+        inference_log.append("Set engine_load_percent=90.0 because query describes high/heavy load conditions.")
     if any(token in query for token in ["low mileage", "poor mileage", "fuel efficiency low", "fuel consumption high"]):
         parsed["fuel_efficiency_kmpl"] = min(float(parsed.get("fuel_efficiency_kmpl", 40.0)), 8.0)
+        inference_log.append("Set fuel_efficiency_kmpl=8.0 (critically low) because query describes poor fuel efficiency.")
     if "not working" in query or "breakdown" in query:
         parsed["fault_code_count"] = min(
             QUERY_FAULT_CODE_MAX,
             max(float(parsed.get("fault_code_count", 0.0)), QUERY_FAULT_CODE_MAX),
         )
+        inference_log.append(
+            f"Set fault_code_count={QUERY_FAULT_CODE_MAX} (maximum) because query describes breakdown or complete failure."
+        )
+
+    if inference_log:
+        parsed["_inference_log"] = inference_log
 
     return parsed
 
@@ -168,7 +191,8 @@ def merge_query_into_input(input_data: Dict, parsed_query_facts: Dict) -> Dict:
         return True
 
     for key, value in parsed_query_facts.items():
-        # Respect explicit user telemetry first. Query facts are fallback hints.
+        if key == "_inference_log":
+            continue
         if key == "days_since_last_service":
             if has_user_value("days_since_last_service") or has_user_value("last_service_date"):
                 continue
@@ -176,19 +200,9 @@ def merge_query_into_input(input_data: Dict, parsed_query_facts: Dict) -> Dict:
             if has_user_value("fault_code_count"):
                 continue
         if key in {
-            "mileage_km",
-            "engine_hours",
-            "vehicle_age_years",
-            "oil_temp_avg_celsius",
-            "vibration_level",
-            "battery_voltage",
-            "engine_load_percent",
-            "fuel_efficiency_kmpl",
-            "vehicle_type",
-            "fuel_type",
-            "region",
-            "road_condition",
-            "weather_condition",
+            "mileage_km", "engine_hours", "vehicle_age_years", "oil_temp_avg_celsius",
+            "vibration_level", "battery_voltage", "engine_load_percent", "fuel_efficiency_kmpl",
+            "vehicle_type", "fuel_type", "region", "road_condition", "weather_condition",
         } and has_user_value(key):
             continue
         merged[key] = value
@@ -205,7 +219,7 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
     if input_data["oil_temp_avg_celsius"] > 110:
         signals.append({
             "issue": "engine overheating risk",
-            "reason": "Oil temperature is above 110°C, which indicates elevated thermal stress.",
+            "reason": "Oil temperature is above 110C, which indicates elevated thermal stress.",
             "priority": "High",
             "timeline": "Inspect immediately",
             "query": "overheating thermal stress engine load",
@@ -256,7 +270,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
             "query": "load efficiency drivetrain stress fuel efficiency",
         })
 
-    # If telemetry is missing or neutral, infer likely checks from user-described symptoms.
     if query:
         if any(token in query for token in ["overheat", "hot engine", "high temp", "temperature high", "engine hot"]) and not has_issue("overheating"):
             signals.append({
@@ -266,7 +279,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Inspect immediately",
                 "query": "overheating thermal stress engine load",
             })
-
         if any(token in query for token in ["vibration", "shake", "shaking", "rattle", "noise"]) and not has_issue("vibration"):
             signals.append({
                 "issue": "abnormal vibration",
@@ -275,7 +287,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Inspect within 24 hours",
                 "query": "vibration mechanical imbalance worn components",
             })
-
         if any(token in query for token in ["battery", "not starting", "won't start", "wont start", "dead battery"]) and not has_issue("battery"):
             signals.append({
                 "issue": "battery degradation",
@@ -284,7 +295,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Test battery today",
                 "query": "battery voltage degradation charging system",
             })
-
         if _query_mentions_fault_codes(query) and not has_issue("fault"):
             signals.append({
                 "issue": "recurring fault activity",
@@ -293,7 +303,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Run diagnostics this shift",
                 "query": "fault codes recurring faults diagnostics",
             })
-
         if (_query_mentions_overdue_service(query) or any(token in query for token in ["not serviced", "service delay"])) and not has_issue("service overdue"):
             signals.append({
                 "issue": "service overdue",
@@ -302,7 +311,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Schedule service this week",
                 "query": "maintenance overdue preventive maintenance service interval",
             })
-
         if any(token in query for token in ["brake", "braking", "stopping distance"]) and not has_issue("brake"):
             signals.append({
                 "issue": "brake system concern",
@@ -311,7 +319,6 @@ def extract_vehicle_signals(input_data: Dict, risk_score: float, maintenance_que
                 "timeline": "Inspect immediately",
                 "query": "brake inspection stopping distance hydraulic leak",
             })
-
         if any(token in query for token in ["steering", "pulling", "alignment"]) and not has_issue("steering"):
             signals.append({
                 "issue": "steering or alignment concern",
@@ -351,26 +358,79 @@ def retrieve_maintenance_context(signals: List[Dict[str, str]], maintenance_quer
     return [doc.page_content for doc in docs]
 
 
+def _find_best_context_for_signal(signal_issue: str, contexts: List[str]) -> str:
+    """Semantically match retrieved context to a signal by keyword overlap."""
+    issue_terms = set(signal_issue.lower().replace("_", " ").split())
+    best_score, best_ctx = -1, contexts[0] if contexts else ""
+    for ctx in contexts:
+        ctx_lower = ctx.lower()
+        score = sum(1 for t in issue_terms if t in ctx_lower)
+        score += sum(2 for t in issue_terms if t in ctx_lower.split("\n")[0])
+        if score > best_score:
+            best_score, best_ctx = score, ctx
+    for line in best_ctx.split("\n"):
+        line = line.strip()
+        if len(line) > 30 and not line.isupper():
+            return line[:240]
+    return best_ctx[:240]
+
+
 def build_action_plan(input_data: Dict, signals: List[Dict[str, str]], contexts: List[str]) -> List[Dict[str, str]]:
-    context_snippet = " ".join(contexts[:2])
+    """
+    Build a structured action plan from detected signals.
+
+    Each item gets a `supporting_guideline` that is semantically matched
+    to the signal issue from retrieved context (Fix 5: replaces fixed slice).
+    """
     action_plan: List[Dict[str, str]] = []
 
     for signal in signals:
-        if "overheating" in signal["issue"]:
-            action = "Check cooling system, oil condition, and sustained engine load before further long trips."
-        elif "vibration" in signal["issue"]:
-            action = "Inspect mounts, rotating assemblies, wheel balance, and drivetrain alignment."
-        elif "battery" in signal["issue"]:
-            action = "Test battery health, alternator output, and terminal condition."
-        elif "fault" in signal["issue"]:
-            action = "Scan and group diagnostic codes, then address repeat faults before clearing them."
-        elif "service overdue" in signal["issue"]:
-            action = "Perform scheduled preventive maintenance and replace time-sensitive consumables."
+        issue = signal["issue"]
+        if "overheating" in issue:
+            action = (
+                "Check cooling system (coolant level, radiator, thermostat), "
+                "oil condition, and sustained engine load before further long trips."
+            )
+        elif "vibration" in issue:
+            action = (
+                "Inspect wheel balance, tyre condition, CV joints, driveshaft, "
+                "engine mounts, and transmission mounts."
+            )
+        elif "battery" in issue:
+            action = (
+                "Conduct a battery load test. Replace if capacity is below 70% "
+                "of rated CCA. Check alternator output and terminal condition."
+            )
+        elif "fault" in issue:
+            action = (
+                "Scan and group diagnostic codes by subsystem. Address recurring "
+                "faults before clearing codes — do not mask underlying failures."
+            )
+        elif "service overdue" in issue:
+            action = (
+                "Perform scheduled preventive maintenance: oil change, filter "
+                "replacement, brake inspection, tyre pressure, and fluid levels."
+            )
+        elif "brake" in issue:
+            action = (
+                "Inspect brake pad thickness, fluid condition, and hydraulic lines. "
+                "Check for ABS fault codes. Ground vehicle if stopping distance is affected."
+            )
+        elif "steering" in issue:
+            action = (
+                "Check wheel alignment, tie rod ends, ball joints, and control arm "
+                "bushings. Inspect for suspension noise or handling pull."
+            )
+        elif "load efficiency" in issue:
+            action = (
+                "Inspect drivetrain under load. Check fuel injectors, air filter, "
+                "and transmission fluid condition."
+            )
         else:
             action = "Run a full inspection and prioritize any failing subsystem identified in diagnostics."
 
         action_plan.append({
-            "issue": signal["issue"].title(),
+            "issue": issue.title(),
             "reason": signal["reason"],
             "context_impact": (
                 f"{input_data['vehicle_type']} operating in {input_data['weather_condition'].lower()} "
@@ -379,7 +439,7 @@ def build_action_plan(input_data: Dict, signals: List[Dict[str, str]], contexts:
             "action": action,
             "priority": signal["priority"],
             "timeline": signal["timeline"],
-            "supporting_context": context_snippet[:220],
+            "supporting_guideline": _find_best_context_for_signal(issue, contexts) if contexts else "",
         })
 
     if not action_plan:
@@ -389,10 +449,14 @@ def build_action_plan(input_data: Dict, signals: List[Dict[str, str]], contexts:
             "context_impact": (
                 f"The current operating profile for this {input_data['vehicle_type'].lower()} does not suggest an immediate fault."
             ),
-            "action": "Continue scheduled inspections and monitor telemetry for sudden changes.",
+            "action": (
+                "Continue scheduled inspections and monitor telemetry for sudden changes. "
+                "Next service within the standard interval."
+            ),
             "priority": "Low",
             "timeline": "Next service cycle",
-            "supporting_context": context_snippet[:220],
+            "supporting_guideline": contexts[0][:240] if contexts else
+                "Preventive maintenance reduces long-term operational risk.",
         })
 
     return action_plan
@@ -405,13 +469,11 @@ def prioritize_action_plan(action_plan: List[Dict[str, str]], maintenance_query:
 
     ranked: List[tuple[int, Dict[str, str]]] = []
     for item in action_plan:
-        searchable = " ".join(
-            [
-                item.get("issue", ""),
-                item.get("reason", ""),
-                item.get("action", ""),
-            ]
-        ).lower()
+        searchable = " ".join([
+            item.get("issue", ""),
+            item.get("reason", ""),
+            item.get("action", ""),
+        ]).lower()
         score = sum(term in searchable for term in query.split())
         ranked.append((score, item))
 
@@ -442,7 +504,6 @@ def build_service_outlook(input_data: Dict, signals: List[Dict[str, str]], risk_
         focus_areas.append("battery and charging system")
     if any("fault" in signal["issue"] for signal in signals):
         focus_areas.append("ECU diagnostics and recurring fault clusters")
-
     if not focus_areas:
         focus_areas.append("routine preventive inspection")
 
@@ -477,27 +538,21 @@ def build_fleet_policy_checks(input_data: Dict, signals: List[Dict[str, str]], r
         checks.append({
             "title": "Preventive Maintenance SLA Breach",
             "status": "Critical",
-            "detail": (
-                "The vehicle is beyond the recommended service interval, so it should be prioritized in the maintenance queue."
-            ),
+            "detail": "The vehicle is beyond the recommended service interval, so it should be prioritized in the maintenance queue.",
         })
 
     if any("recurring fault activity" == signal["issue"] for signal in signals):
         checks.append({
             "title": "Diagnostic Escalation",
             "status": "Critical",
-            "detail": (
-                "Repeated fault activity should be escalated from basic service to root-cause diagnostics before the vehicle returns to full duty."
-            ),
+            "detail": "Repeated fault activity should be escalated from basic service to root-cause diagnostics before the vehicle returns to full duty.",
         })
 
     if road_condition == "Highway" and risk_score >= HIGH_RISK_THRESHOLD:
         checks.append({
             "title": "Route Assignment Restriction",
             "status": "Attention",
-            "detail": (
-                "High-risk vehicles should be moved off long continuous highway duty until inspection confirms stable operating health."
-            ),
+            "detail": "High-risk vehicles should be moved off long continuous highway duty until inspection confirms stable operating health.",
         })
 
     if weather in {"Hot", "Cold"} and risk_score >= MEDIUM_RISK_THRESHOLD:
@@ -528,17 +583,11 @@ def build_query_response(
     first_action = top_actions[0] if top_actions else {}
 
     if risk_label == "HIGH":
-        short_answer = (
-            "Yes, this case should be treated as urgent. Move the vehicle toward inspection and address the highest-risk subsystem first."
-        )
+        short_answer = "Yes, this case should be treated as urgent. Move the vehicle toward inspection and address the highest-risk subsystem first."
     elif risk_label == "MEDIUM":
-        short_answer = (
-            "This does not look critical yet, but it should be inspected soon before the issue becomes operationally expensive."
-        )
+        short_answer = "This does not look critical yet, but it should be inspected soon before the issue becomes operationally expensive."
     else:
-        short_answer = (
-            "The current risk is low, so continue service with targeted checks and normal monitoring."
-        )
+        short_answer = "The current risk is low, so continue service with targeted checks and normal monitoring."
 
     immediate_steps = [
         {
@@ -554,6 +603,8 @@ def build_query_response(
         first_line = context.splitlines()[0].strip()
         evidence.append(first_line if first_line else "Maintenance guidance")
 
+    public_facts = {k: v for k, v in parsed_query_facts.items() if k != "_inference_log"}
+
     return {
         "question": maintenance_query,
         "short_answer": short_answer,
@@ -561,7 +612,7 @@ def build_query_response(
         "immediate_steps": immediate_steps,
         "evidence_used": evidence,
         "risk_context": f"{risk_label.title()} risk ({risk_score:.1%})",
-        "parsed_facts": parsed_query_facts,
+        "parsed_facts": public_facts,
     }
 
 
@@ -569,7 +620,6 @@ def merge_report(base_report: Dict, enriched: Dict) -> Dict:
     """Safely merge enriched report, validating action_plan and critical fields."""
     merged = dict(base_report)
     for key, value in enriched.items():
-        # Never overwrite action_plan with malformed data
         if key == "action_plan":
             if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
                 logger.warning("Skipping malformed action_plan from enrichment.")
@@ -596,12 +646,7 @@ def maybe_enrich_with_llm(base_report: Dict, input_data: Dict, contexts: List[st
     ollama_model = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
 
-    llm = ChatOllama(
-        model=ollama_model,
-        base_url=ollama_base_url,
-        temperature=0,
-        format="json",
-    )
+    llm = ChatOllama(model=ollama_model, base_url=ollama_base_url, temperature=0, format="json")
     prompt = f"""
 You are a vehicle maintenance copilot.
 Return valid JSON only.
@@ -622,7 +667,6 @@ BASE_REPORT:
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         enriched = json.loads(content)
         if isinstance(enriched, dict):
-            # Validate action_plan shape before merging
             ap = enriched.get("action_plan", [])
             if "action_plan" in enriched:
                 if not (isinstance(ap, list) and all(isinstance(item, dict) for item in ap)):
@@ -638,6 +682,10 @@ BASE_REPORT:
 
 
 def analyze_vehicle(input_data: Dict) -> Dict:
+    """
+    Standalone analysis pipeline (used for testing and fallback).
+    For production, prefer the LangGraph agent in langgraph_agent.py.
+    """
     request_mode = detect_request_mode(input_data)
     maintenance_query = extract_user_query(input_data)
     query_is_relevant = is_maintenance_query_relevant(maintenance_query)
@@ -655,13 +703,12 @@ def analyze_vehicle(input_data: Dict) -> Dict:
     service_outlook = build_service_outlook(normalized_input, signals, risk_score)
     fleet_policy_checks = build_fleet_policy_checks(normalized_input, signals, risk_score)
     query_response = build_query_response(
-        maintenance_query,
-        action_plan,
-        risk_label,
-        risk_score,
-        contexts,
-        parsed_query_facts,
+        maintenance_query, action_plan, risk_label, risk_score, contexts, parsed_query_facts,
     )
+
+    # Surface query inference log in decision_trace for transparency (Fix 4)
+    inference_log = parsed_query_facts.get("_inference_log", [])
+    public_facts = {k: v for k, v in parsed_query_facts.items() if k != "_inference_log"}
 
     report = {
         "request_mode": request_mode,
@@ -679,8 +726,9 @@ def analyze_vehicle(input_data: Dict) -> Dict:
         "risk_prediction": prediction["risk_prediction"],
         "key_issues": [signal["issue"] for signal in signals] or ["no immediate critical issue"],
         "maintenance_query": maintenance_query,
-        "parsed_query_facts": parsed_query_facts,
+        "parsed_query_facts": public_facts,
         "retrieval_mode": get_retriever_mode(),
+        "retrieval_query": build_retrieval_query(signals, maintenance_query),
         "retrieved_context": contexts,
         "sources": contexts,
         "query_response": query_response,
@@ -692,7 +740,8 @@ def analyze_vehicle(input_data: Dict) -> Dict:
             "query_present": bool(maintenance_query.strip()),
             "query_is_relevant": query_is_relevant,
             "telemetry_present": request_mode in {"input_only", "combined"},
-            "parsed_query_facts": parsed_query_facts,
+            "parsed_query_facts": public_facts,
+            "query_inference_log": inference_log,
             "detected_signals": [signal["issue"] for signal in signals],
             "retrieval_query": build_retrieval_query(signals, maintenance_query),
             "retrieval_mode": get_retriever_mode(),
