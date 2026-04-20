@@ -111,7 +111,7 @@ def build_input_form_grid(features: List[str], num_cols: int = 3, use_sidebar: b
     num_cols = max(1, num_cols)
     cols = ui.columns(num_cols)
     _init_widget_state("fault_code_count_unknown", False)
-    fault_code_unknown = ui.checkbox(
+    fault_code_unknown = ui.toggle(
         "I do not know the fault code count",
         key=_shared_widget_key("fault_code_count_unknown"),
         help="If selected, the app will use a conservative estimate instead of treating the value as zero.",

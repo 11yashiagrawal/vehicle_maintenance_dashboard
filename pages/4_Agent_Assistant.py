@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import date
+import os
 
 from utils.langgraph_agent import build_agent
 from utils.agent_logic import is_maintenance_query_relevant
@@ -413,6 +414,11 @@ maintenance_query = st.text_area(
     placeholder="Example: This SUV has overheating, vibration, and overdue service. What should be inspected first?",
     help="Ask a maintenance question to guide the agent's retrieval and recommendations.",
 )
+enable_ollama = st.toggle(
+    "Enable Ollama enrichment (optional)",
+    value=False,
+    help="Requires a local Ollama server. Core model + rule pipeline works without this.",
+)
 input_data = build_input_form_grid(features, num_cols=2, use_sidebar=False)
 
 run_agent = st.button("🤖 Run Maintenance Agent", type="primary")
@@ -422,6 +428,7 @@ if run_agent:
         with st.spinner("Analyzing vehicle telemetry with the maintenance agent..."):
             input_data["maintenance_query"] = maintenance_query
             submission_summary = summarize_submission(input_data, maintenance_query)
+            os.environ["ENABLE_OLLAMA_ENRICHMENT"] = "1" if enable_ollama else "0"
 
             if (
                 submission_summary.get("request_mode") == "Query Only"
